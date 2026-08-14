@@ -1,0 +1,14 @@
+# secrets
+.env
+
+# local data (products, uploaded photos, generated videos)
+/data/
+data/
+
+# build output
+/out/
+server
+*.exe
+
+# OS / editor
+.DS_Store

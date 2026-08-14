@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STUDIO 16 Go</title>
+<style>
+:root{
+  --ink:#17131F; --panel:#221C2C; --panel2:#2A2236; --line:#3A3048;
+  --parchment:#F1ECE4; --muted:#9E92B0; --signal:#FFD84D; --lilac:#B9A6E8;
+  --cart:#FF6A2B; --ok:#6FD8A8; --bad:#FF7A7A; --r:10px;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --sans:"IBM Plex Sans Thai",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--ink); color:var(--parchment); font-family:var(--sans); font-size:15px; line-height:1.6; height:100vh}
+.app{height:100vh; display:flex; flex-direction:column; overflow:hidden}
+.appbar{display:flex; align-items:center; gap:10px; padding:12px 18px; border-bottom:1px solid var(--line)}
+.logo{font-family:var(--mono); font-weight:700; letter-spacing:.05em; font-size:17px}
+.pill{font-family:var(--mono); font-size:10px; font-weight:600; padding:2px 8px; border-radius:6px; background:rgba(185,166,232,.16); color:var(--lilac)}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block;vertical-align:1px}
+.btn{font-family:var(--sans); font-size:13px; padding:8px 13px; border-radius:var(--r); border:1px solid var(--line); background:var(--panel2); color:var(--parchment); cursor:pointer}
+.btn:hover{background:var(--line)}
+.btn.y{background:var(--signal); color:#1A1508; border:none; font-weight:700}
+.btn.o{background:var(--cart); color:#fff; border:none; font-weight:700}
+.btn:disabled{opacity:.5; cursor:wait}
+.body{display:grid; grid-template-columns:230px 1fr; flex:1; min-height:0}
+aside{border-right:1px solid var(--line); padding:14px; background:var(--panel2); overflow:auto}
+main{padding:22px 28px; min-width:0; overflow:auto}
+.lbl{font-family:var(--mono); font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted)}
+.nav{display:flex; flex-direction:column; gap:3px; margin:8px 0 14px}
+.nitem{display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:var(--r); border:1px solid transparent; background:none; color:var(--parchment); width:100%; font-family:var(--sans); font-size:13.5px; cursor:pointer; text-align:left}
+.nitem:hover{background:var(--panel)} .nitem.on{background:var(--panel); border-color:var(--signal)}
+.nitem .ni{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex:none;background:var(--panel);font-size:15px}
+.nitem.on .ni{background:rgba(255,216,77,.16)}
+.pitem{width:100%;display:flex;align-items:center;gap:9px;padding:8px;margin-top:4px;text-align:left;background:none;border:1px solid transparent;border-radius:var(--r);color:var(--parchment);font-family:var(--sans);font-size:13px;cursor:pointer}
+.pitem:hover{background:var(--panel)} .pitem.on{background:var(--panel);border-color:var(--signal)}
+.pitem .sw{width:24px;height:30px;border-radius:5px;flex:none;background:var(--line)}
+.pitem .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.newp{width:100%;margin-top:8px;padding:8px;border-radius:var(--r);border:1px dashed var(--line);background:none;color:var(--muted);font-family:var(--sans);font-size:13px;cursor:pointer}
+.newp:hover{border-color:var(--signal);color:var(--parchment)}
+.h{font-size:19px;font-weight:600} .sub{font-size:12.5px;color:var(--muted);margin-bottom:16px}
+.muted{color:var(--muted)} .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:14px 0;flex-wrap:wrap}
+.tab{background:none;border:none;border-bottom:2px solid transparent;border-radius:0;cursor:pointer;padding:9px 13px;font-family:var(--sans);font-size:13.5px;color:var(--muted);font-weight:600}
+.tab:hover{color:var(--parchment)} .tab.on{color:var(--signal);border-bottom-color:var(--signal)}
+label.f{display:block;margin-bottom:12px} label.f .lbl{display:block;margin-bottom:5px}
+input,textarea,select{width:100%;background:var(--ink);color:var(--parchment);border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-family:var(--sans);font-size:14px}
+textarea{resize:vertical;min-height:70px;font-family:var(--mono);font-size:11.5px;line-height:1.55}
+.grid2{display:grid;gap:12px} @media(min-width:620px){.grid2{grid-template-columns:1fr 1fr}}
+.pre{font-family:var(--mono);font-size:11.5px;line-height:1.6;background:var(--ink);border:1px solid var(--line);border-radius:var(--r);padding:13px;color:var(--parchment);white-space:pre-wrap;max-height:360px;overflow:auto}
+.shelf{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+.ph{position:relative;width:92px;height:118px;border-radius:9px;overflow:hidden;border:1px solid var(--line);background:var(--ink)}
+.ph img{width:100%;height:100%;object-fit:cover;display:block}
+.ph button{position:absolute;top:4px;right:4px;background:#000A;color:#fff;border:none;width:22px;height:22px;border-radius:50%;font-size:13px;cursor:pointer}
+.card{display:flex;align-items:center;gap:11px;padding:10px 13px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);margin-bottom:7px}
+.ic{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none;font-size:15px}
+.stat{flex:1;background:var(--panel2);border-radius:var(--r);padding:11px 13px} .stat .n{font-size:24px;font-weight:700;margin-top:2px}
+.bar{height:6px;border-radius:3px;background:var(--ink);overflow:hidden} .bar>i{display:block;height:100%}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+.gcard{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px}
+video{width:100%;border-radius:9px;border:1px solid var(--line);background:#000}
+.badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px}
+#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);color:var(--parchment);padding:10px 16px;border-radius:var(--r);font-size:13px;opacity:0;pointer-events:none;transition:.2s;z-index:80;max-width:80vw}
+#toast.on{opacity:1} #toast.err{border-color:var(--bad);color:#FFC9C9}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:flex-start;justify-content:center;z-index:60;padding:40px 16px;overflow:auto}
+.sheet{background:var(--panel);border:1px solid var(--line);border-radius:16px;width:100%;max-width:480px;padding:18px 20px}
+.kv{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}
+.risk{font-size:12px;color:#E9D9A6;margin-top:2px}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="appbar">
+    <span class="logo">STUDIO 16</span><span class="pill">GO</span>
+    <span style="margin-left:auto" class="row">
+      <span id="health" class="muted" style="font-size:12px"></span>
+      <button class="btn" id="setbtn" style="padding:6px 10px" title="สถานะ / ตั้งค่า">⚙️</button>
+    </span>
+  </div>
+  <div class="body">
+    <aside>
+      <div class="lbl">เมนู</div>
+      <div class="nav" id="nav"></div>
+      <div id="plistwrap" style="display:none">
+        <div class="lbl">สินค้า</div>
+        <div id="plist"></div>
+        <button class="newp" id="newp">+ สินค้าใหม่</button>
+      </div>
+    </aside>
+    <main id="main"></main>
+  </div>
+</div>
+
+<div id="toast"></div>
+<div class="modal" id="setmodal">
+  <div class="sheet">
+    <div class="row" style="margin-bottom:12px"><span style="font-size:15px;font-weight:600">⚙️ สถานะระบบ</span>
+      <button class="btn" style="margin-left:auto;padding:4px 10px" onclick="closeSet()">✕</button></div>
+    <div id="setbody"></div>
+    <div class="muted" style="font-size:11.5px;margin-top:12px;line-height:1.6">🔒 API key ตั้งค่าฝั่ง server ในไฟล์ <span style="font-family:var(--mono)">.env</span> (OPENAI_API_KEY, GEMINI_API_KEY) แล้วรีสตาร์ท backend</div>
+  </div>
+</div>
+
+<script>
+const NAV=[{k:'clip',name:'ทำคลิป',ic:'🎬'},{k:'prompts',name:'คลังพรอมต์',ic:'📚'},{k:'characters',name:'ตัวละคร',ic:'🎭'},{k:'clips',name:'คลังคลิป',ic:'🎞️'}];
+let nav='clip', products=[], cur=null, tab='info', presets=[], health=null, pollTimer=null;
+
+async function api(path,opts){
+  const r=await fetch(path,opts||{});
+  const ct=r.headers.get('content-type')||'';
+  const data=ct.includes('application/json')?await r.json():await r.text();
+  if(!r.ok) throw new Error((data&&data.error)||(typeof data==='string'&&data)||('HTTP '+r.status));
+  return data;
+}
+const jpost=(p,b)=>api(p,{method:'POST',headers:{'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined});
+const jpatch=(p,b)=>api(p,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+const jdel=(p)=>api(p,{method:'DELETE'});
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function toast(m,err){const t=document.getElementById('toast');t.textContent=m;t.className='on'+(err?' err':'');clearTimeout(t._x);t._x=setTimeout(()=>t.className='',err?3600:2000);}
+function getCur(){return products.find(p=>p.id===cur)||null;}
+function assetURL(rel){return rel?('/'+rel):'';}
+
+async function boot(){
+  try{ health=await api('/api/health'); }catch(e){ health=null; }
+  renderHealth();
+  try{ presets=await api('/api/base-presets'); }catch(e){ presets=[]; }
+  await reloadProducts();
+  renderNav(); renderMain();
+}
+async function reloadProducts(){
+  try{ products=await api('/api/products'); }catch(e){ products=[]; toast('โหลดสินค้าไม่ได้: '+e.message,1); }
+  if(!cur && products.length) cur=products[0].id;
+  if(cur && !products.find(p=>p.id===cur)) cur=products[0]?products[0].id:null;
+}
+function renderHealth(){
+  const el=document.getElementById('health');
+  if(!health){ el.innerHTML='<span class="dot" style="background:var(--bad)"></span> offline'; return; }
+  const o=health.openaiConfigured, g=health.geminiConfigured;
+  el.innerHTML='<span class="dot" style="background:'+(o?'var(--ok)':'var(--muted)')+'"></span> OpenAI '+
+    '<span class="dot" style="background:'+(g?'var(--ok)':'var(--muted)')+'; margin-left:8px"></span> Gemini/Veo';
+}
+
+function renderNav(){
+  const wrap=document.getElementById('nav'); wrap.innerHTML='';
+  NAV.forEach(n=>{
+    const b=document.createElement('button');
+    b.className='nitem'+(n.k===nav?' on':'');
+    b.innerHTML='<span class="ni">'+n.ic+'</span><span>'+n.name+'</span>';
+    b.onclick=()=>{ nav=n.k; renderNav(); renderMain(); };
+    wrap.appendChild(b);
+  });
+  document.getElementById('plistwrap').style.display = nav==='clip'?'block':'none';
+  if(nav==='clip') renderPlist();
+}
+function renderPlist(){
+  const pl=document.getElementById('plist'); pl.innerHTML='';
+  products.forEach(p=>{
+    const b=document.createElement('button');
+    b.className='pitem'+(p.id===cur?' on':'');
+    const c=p.heroColor||'';
+    b.innerHTML='<span class="sw" style="background:'+(/^#|rgb|[a-z]/i.test(c)?'#EDE6D6':'#EDE6D6')+'"></span><span class="nm">'+esc(p.name||'สินค้า')+'</span>';
+    b.onclick=()=>{ cur=p.id; tab='info'; renderPlist(); renderMain(); };
+    pl.appendChild(b);
+  });
+}
+
+function renderMain(){
+  stopPoll();
+  if(nav==='clip') return clipView();
+  if(nav==='prompts') return promptsView();
+  if(nav==='characters') return charView();
+  if(nav==='clips') return clipsView();
+}
+
+/* ---------- ทำคลิป ---------- */
+function clipView(){
+  const p=getCur();
+  const main=document.getElementById('main');
+  if(!p){ main.innerHTML='<div class="h">ยังไม่มีสินค้า</div><div class="sub">กด “+ สินค้าใหม่” ทางซ้ายเพื่อเริ่ม</div>'; return; }
+  const tabs=[{k:'info',l:'สินค้า'},{k:'prompt',l:'พรอมต์'},{k:'video',l:'วิดีโอ'},{k:'report',l:'รีพอท'}];
+  main.innerHTML='<div class="h">'+esc(p.name||'สินค้า')+'</div><div class="sub">'+esc(p.type||'')+(p.heroColor?(' · '+esc(p.heroColor)):'')+'</div>'+
+    '<div class="tabs">'+tabs.map(t=>'<button class="tab'+(t.k===tab?' on':'')+'" onclick="setTab(\''+t.k+'\')">'+t.l+'</button>').join('')+'</div>'+
+    '<div id="panel"></div>';
+  renderPanel();
+}
+function setTab(t){ tab=t; clipView(); }
+function renderPanel(){
+  const p=getCur(); if(!p) return;
+  if(tab==='info') return infoPanel(p);
+  if(tab==='prompt') return promptPanel(p);
+  if(tab==='video') return videoPanel(p);
+  if(tab==='report') return reportPanel(p);
+}
+
+function infoPanel(p){
+  const el=document.getElementById('panel');
+  const imgs=(p.images||[]).map(im=>'<div class="ph"><img src="'+assetURL(im.path)+'" alt=""><button onclick="delImg(\''+im.id+'\')" title="ลบ">×</button></div>').join('');
+  const sp=p.spec||{};
+  const specTxt=['neckline','straps','armhole','fabric','print','trim','hem','fit','details'].map(k=>sp[k]?('- '+k+': '+sp[k]):'').filter(Boolean).join('\n');
+  el.innerHTML=
+    '<div class="grid2">'+
+      '<label class="f"><span class="lbl">ชื่อสินค้า</span><input id="f_name" value="'+esc(p.name)+'"></label>'+
+      '<label class="f"><span class="lbl">ประเภท (อังกฤษ)</span><input id="f_type" value="'+esc(p.type)+'"></label>'+
+      '<label class="f"><span class="lbl">สีหลัก</span><input id="f_hero" value="'+esc(p.heroColor)+'"></label>'+
+      '<label class="f"><span class="lbl">ฟอร์แมต</span><select id="f_fmt">'+opt(['mirror','cafe','pair'],p.format,['ยืนหน้ากระจก','คาเฟ่','จับคู่สี'])+'</select></label>'+
+      '<label class="f"><span class="lbl">โหมดเสียง</span><select id="f_audio">'+opt(['talk','laugh','silent'],p.audioMode,['พูด','หัวเราะ','เงียบ'])+'</select></label>'+
+    '</div>'+
+    '<label class="f"><span class="lbl">คำบรรยายร้าน (ช่วย AI อ่านรูป)</span><textarea id="f_desc" style="font-family:var(--sans);font-size:14px">'+esc(p.desc)+'</textarea></label>'+
+    '<div class="row" style="margin-bottom:16px"><button class="btn y" onclick="saveInfo()">บันทึกข้อมูล</button><button class="btn" style="color:#FF9E9E" onclick="delProduct()">ลบสินค้า</button></div>'+
+    '<div class="lbl">รูปสินค้า</div><div class="shelf">'+imgs+'<label class="ph" style="display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);border-style:dashed">+ รูป<input type="file" accept="image/*" multiple style="display:none" onchange="uploadImgs(this)"></label></div>'+
+    '<div class="row" style="margin:14px 0"><select id="f_prov" style="width:auto">'+opt(['openai','gemini'],'openai')+'</select><button class="btn" id="analyzeBtn" onclick="analyze()">อ่านรูป → เติมสเปกอัตโนมัติ</button></div>'+
+    '<div class="lbl">สเปกที่อ่านได้</div><div class="pre" style="max-height:240px">'+(specTxt?esc(specTxt):'— ยังไม่มี กด “อ่านรูป” —')+'</div>';
+}
+function opt(vals,cur,labels){return vals.map((v,i)=>'<option value="'+v+'"'+(v===cur?' selected':'')+'>'+(labels?labels[i]:v)+'</option>').join('');}
+async function saveInfo(){
+  const g=id=>document.getElementById(id).value;
+  try{ await jpatch('/api/products/'+cur,{name:g('f_name'),type:g('f_type'),heroColor:g('f_hero'),format:g('f_fmt'),audioMode:g('f_audio'),desc:g('f_desc')});
+    await reloadProducts(); toast('บันทึกแล้ว'); renderPlist(); clipView(); }catch(e){ toast(e.message,1); }
+}
+async function delProduct(){
+  if(!confirm('ลบสินค้านี้และรูปทั้งหมด?')) return;
+  try{ await jdel('/api/products/'+cur); cur=null; await reloadProducts(); renderNav(); renderMain(); toast('ลบแล้ว'); }catch(e){ toast(e.message,1); }
+}
+function fileToDataURL(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(f);});}
+async function uploadImgs(input){
+  const files=[...input.files]; if(!files.length) return;
+  try{ for(const f of files){ const dataUrl=await fileToDataURL(f); await jpost('/api/products/'+cur+'/images',{dataUrl}); }
+    await reloadProducts(); toast('อัปรูปแล้ว'); infoPanel(getCur()); }catch(e){ toast(e.message,1); }
+}
+async function delImg(imgId){ try{ await jdel('/api/products/'+cur+'/images/'+imgId); await reloadProducts(); infoPanel(getCur()); }catch(e){ toast(e.message,1); } }
+async function analyze(){
+  const btn=document.getElementById('analyzeBtn'); const prov=document.getElementById('f_prov').value;
+  btn.disabled=true; btn.textContent='กำลังอ่านรูป…';
+  try{ await jpost('/api/products/'+cur+'/analyze?provider='+prov,{}); await reloadProducts(); toast('อ่านรูปเสร็จ'); infoPanel(getCur()); }
+  catch(e){ toast(e.message,1); btn.disabled=false; btn.textContent='อ่านรูป → เติมสเปกอัตโนมัติ'; }
+}
+
+function promptPanel(p){
+  const el=document.getElementById('panel');
+  el.innerHTML='<div class="row" style="margin-bottom:12px">'+
+    '<select id="p_fmt" style="width:auto">'+opt(['mirror','cafe','pair'],p.format,['ยืนหน้ากระจก','คาเฟ่','จับคู่สี'])+'</select>'+
+    '<select id="p_audio" style="width:auto">'+opt(['talk','laugh','silent'],p.audioMode,['พูด','หัวเราะ','เงียบ'])+'</select>'+
+    '<button class="btn" onclick="buildPrompt()">สร้างพรอมต์</button>'+
+    '<button class="btn o" onclick="genVideo()">▶ เจนวิดีโอ Veo</button></div>'+
+    '<div id="riskbox"></div>'+
+    '<div class="row" style="margin-bottom:8px"><span class="lbl">พรอมต์</span><button class="btn" style="margin-left:auto;padding:5px 11px;font-size:12px" onclick="copyPrompt()">คัดลอก</button></div>'+
+    '<div class="pre" id="promptbox">— กด “สร้างพรอมต์” —</div>';
+}
+async function buildPrompt(){
+  const f=document.getElementById('p_fmt').value, a=document.getElementById('p_audio').value;
+  try{ const d=await api('/api/products/'+cur+'/prompt?format='+f+'&audio='+a);
+    document.getElementById('promptbox').textContent=d.prompt||'';
+    const rb=document.getElementById('riskbox');
+    rb.innerHTML=(d.risks&&d.risks.length)?('<div class="risk">⚠️ คำเสี่ยง: '+d.risks.map(r=>esc(r.found)+' → '+esc(r.good)).join(' · ')+'</div>'):'<div class="risk" style="color:var(--ok)">✓ ไม่พบคำเสี่ยง</div>';
+  }catch(e){ toast(e.message,1); }
+}
+function copyPrompt(){const t=document.getElementById('promptbox').textContent;navigator.clipboard.writeText(t).then(()=>toast('คัดลอกแล้ว'),()=>toast('คัดลอกไม่ได้',1));}
+async function genVideo(){
+  const f=document.getElementById('p_fmt').value, a=document.getElementById('p_audio').value;
+  try{ await jpost('/api/products/'+cur+'/generate',{format:f,audio:a}); toast('ส่งงานเจนวิดีโอแล้ว — ดูสถานะที่แท็บ วิดีโอ'); await reloadProducts(); tab='video'; clipView(); }
+  catch(e){ toast(e.message,1); }
+}
+
+function videoPanel(p){
+  const el=document.getElementById('panel');
+  const jobs=(p.jobs||[]);
+  el.innerHTML='<div class="row" style="margin-bottom:12px"><button class="btn o" onclick="tab=\'prompt\';clipView()">▶ เจนวิดีโอใหม่</button></div>'+
+    (jobs.length?jobs.map(j=>jobCard(j)).join(''):'<div class="muted">ยังไม่มีงานวิดีโอ</div>');
+  if(jobs.some(j=>j.status==='queued'||j.status==='running')) startPoll();
+}
+function jobCard(j){
+  const s=j.status;
+  const col=s==='done'?'var(--ok)':s==='error'?'var(--bad)':'var(--lilac)';
+  const ic=s==='done'?'✓':s==='error'?'✕':'◴';
+  const vid=(s==='done'&&j.videoPath)?'<video src="'+assetURL(j.videoPath)+'" controls></video>':'';
+  const err=j.error?('<div class="risk" style="color:#FFC9C9">'+esc(j.error)+'</div>'):'';
+  return '<div style="margin-bottom:12px"><div class="card"><span class="ic" style="background:rgba(255,255,255,.06);color:'+col+'">'+ic+'</span>'+
+    '<div style="flex:1"><div style="font-size:13px">'+esc(j.format)+' · '+esc(j.audioMode)+'</div><div class="muted" style="font-size:11.5px">'+esc(j.provider||'')+'</div></div>'+
+    '<span style="font-size:12px;color:'+col+'">'+esc(s)+'</span></div>'+err+vid+'</div>';
+}
+function startPoll(){ stopPoll(); pollTimer=setInterval(async()=>{ try{ const p=await api('/api/products/'+cur); const i=products.findIndex(x=>x.id===cur); if(i>=0) products[i]=p; if(nav==='clip'&&tab==='video') videoPanel(p); if(!(p.jobs||[]).some(j=>j.status==='queued'||j.status==='running')) stopPoll(); }catch(e){} },8000); }
+function stopPoll(){ if(pollTimer){ clearInterval(pollTimer); pollTimer=null; } }
+
+function reportPanel(p){
+  const el=document.getElementById('panel');
+  const rep=p.report;
+  let body='';
+  if(rep){
+    body='<div class="row" style="margin-bottom:13px">'+
+      '<div class="stat"><div class="muted" style="font-size:12px">ผ่าน (ตรง)</div><div class="n" style="color:var(--ok)">'+rep.passCount+'</div></div>'+
+      '<div class="stat"><div class="muted" style="font-size:12px">ไม่ผ่าน</div><div class="n" style="color:var(--bad)">'+rep.failCount+'</div></div>'+
+      '<div class="stat"><div class="muted" style="font-size:12px">เกณฑ์ผ่าน</div><div class="n">'+rep.threshold+'</div></div></div>'+
+      (rep.items||[]).map(it=>{ const col=it.pass?'var(--ok)':'var(--bad)';
+        return '<div class="card"><span style="font-size:11px;color:var(--muted);width:34px;font-family:var(--mono)">'+esc(it.kind)+'</span>'+
+        '<div style="flex:1;min-width:0"><div style="font-size:13px">'+esc(it.verdict||'')+'</div>'+(it.mismatches&&it.mismatches.length?'<div class="muted" style="font-size:11.5px">'+esc(it.mismatches.join(', '))+'</div>':'')+'</div>'+
+        '<div style="width:70px"><div class="bar"><i style="width:'+(it.score||0)+'%;background:'+col+'"></i></div></div>'+
+        '<span style="font-size:13px;font-weight:700;width:26px;text-align:right">'+(it.score||0)+'</span>'+
+        '<span style="font-size:11.5px;font-weight:700;color:'+col+';width:50px;text-align:right">'+(it.pass?'ผ่าน':'ไม่ผ่าน')+'</span></div>';
+      }).join('');
+  } else { body='<div class="muted">ยังไม่มีรีพอท</div>'; }
+  el.innerHTML='<div class="row" style="margin-bottom:12px"><button class="btn y" id="repBtn" onclick="runReport()">ตรวจสินค้าตรง/ไม่ตรง</button><span class="muted" style="font-size:12px">ให้ AI เทียบรูป+คลิปกับสินค้าจริง</span></div>'+body;
+}
+async function runReport(){
+  const btn=document.getElementById('repBtn'); btn.disabled=true; btn.textContent='กำลังตรวจ…';
+  try{ await jpost('/api/products/'+cur+'/report',{}); await reloadProducts(); toast('ตรวจเสร็จ'); reportPanel(getCur()); }
+  catch(e){ toast(e.message,1); btn.disabled=false; btn.textContent='ตรวจสินค้าตรง/ไม่ตรง'; }
+}
+
+/* ---------- คลังพรอมต์ ---------- */
+function promptsView(){
+  const p=getCur(); const main=document.getElementById('main');
+  const opts=presets.map(b=>'<option value="'+b.id+'"'+(p&&p.basePresetId===b.id?' selected':'')+'>'+esc(b.name)+'</option>').join('');
+  const bc=(p&&p.baseCustom)||{};
+  main.innerHTML='<div class="h">คลังพรอมต์</div><div class="sub">เลือกชุด Base และปรับพรอมต์ของสินค้าที่เลือก'+(p?(' · '+esc(p.name)):'')+'</div>'+
+    (p?(
+      '<label class="f"><span class="lbl">ชุด Base</span><select id="bp_sel">'+opts+'</select></label>'+
+      '<label class="f"><span class="lbl">ตัวละคร · IDENTITY (เว้นว่าง = ใช้ค่าจากชุด)</span><textarea id="bc_id">'+esc(bc.identity)+'</textarea></label>'+
+      '<label class="f"><span class="lbl">สไตล์ · STYLE</span><textarea id="bc_style" style="min-height:120px">'+esc(bc.style)+'</textarea></label>'+
+      '<label class="f"><span class="lbl">ROLE</span><textarea id="bc_role">'+esc(bc.role)+'</textarea></label>'+
+      '<label class="f"><span class="lbl">MODEL SETTINGS</span><textarea id="bc_model">'+esc(bc.modelSettings)+'</textarea></label>'+
+      '<div class="row"><button class="btn y" onclick="savePrompts()">บันทึก</button><button class="btn" onclick="viewFullPrompt()">ดูพรอมต์เต็ม</button></div>'+
+      '<div class="pre" id="fullprompt" style="margin-top:12px;display:none"></div>'
+    ):'<div class="muted">เลือกสินค้าจากเมนู ทำคลิป ก่อน</div>');
+}
+async function savePrompts(){
+  const g=id=>document.getElementById(id).value;
+  const custom={identity:g('bc_id'),style:g('bc_style'),role:g('bc_role'),modelSettings:g('bc_model')};
+  const empty=!custom.identity&&!custom.style&&!custom.role&&!custom.modelSettings;
+  try{ await jpatch('/api/products/'+cur,{basePresetId:document.getElementById('bp_sel').value,baseCustom:empty?null:custom});
+    await reloadProducts(); toast('บันทึกแล้ว'); }catch(e){ toast(e.message,1); }
+}
+async function viewFullPrompt(){
+  try{ const d=await api('/api/products/'+cur+'/prompt'); const box=document.getElementById('fullprompt'); box.style.display='block'; box.textContent=d.prompt||''; }catch(e){ toast(e.message,1); }
+}
+
+/* ---------- ตัวละคร ---------- */
+function charView(){
+  const main=document.getElementById('main');
+  main.innerHTML='<div class="h">ตัวละคร</div><div class="sub">ชุด Base (นางแบบ) ที่มีในระบบ — เลือกใช้ต่อสินค้าได้ในเมนู คลังพรอมต์</div>'+
+    '<div class="grid">'+presets.map(b=>'<div class="gcard"><div style="font-size:14px;font-weight:600;margin-bottom:6px">'+esc(b.name)+'</div>'+
+    '<div class="muted" style="font-size:11.5px;line-height:1.5">'+esc((b.identity||'').slice(0,120))+'…</div></div>').join('')+'</div>';
+}
+
+/* ---------- คลังคลิป ---------- */
+function clipsView(){
+  const main=document.getElementById('main');
+  const all=[];
+  products.forEach(p=>(p.jobs||[]).forEach(j=>all.push({p,j})));
+  main.innerHTML='<div class="h">คลังคลิป</div><div class="sub">คลิปที่เจนแล้วทั้งหมด</div>'+
+    (all.length?('<div class="grid">'+all.map(({p,j})=>{
+      const done=j.status==='done';
+      const badge=done?'<span class="badge" style="background:rgba(111,216,168,.16);color:var(--ok)">เสร็จ</span>':
+        j.status==='error'?'<span class="badge" style="background:rgba(255,122,122,.16);color:var(--bad)">error</span>':
+        '<span class="badge" style="background:rgba(185,166,232,.16);color:var(--lilac)">'+esc(j.status)+'</span>';
+      const media=done&&j.videoPath?'<video src="'+assetURL(j.videoPath)+'" controls></video>':'<div class="pre" style="text-align:center;color:var(--muted)">—</div>';
+      return '<div class="gcard">'+media+'<div style="font-size:13px;margin-top:8px">'+esc(p.name)+'</div><div class="muted" style="font-size:11.5px;margin:2px 0 8px">'+esc(j.format)+' · '+esc(j.audioMode)+'</div>'+badge+'</div>';
+    }).join('')+'</div>'):'<div class="muted">ยังไม่มีคลิป</div>');
+}
+
+/* ---------- new product / settings ---------- */
+document.getElementById('newp').onclick=async()=>{
+  try{ const p=await jpost('/api/products',{}); cur=p.id; tab='info'; await reloadProducts(); renderPlist(); clipView(); toast('สร้างสินค้าใหม่'); }catch(e){ toast(e.message,1); }
+};
+const setmodal=document.getElementById('setmodal');
+document.getElementById('setbtn').onclick=()=>{
+  const b=document.getElementById('setbody');
+  if(health){ b.innerHTML='<div class="kv"><span>OpenAI key</span><b style="color:'+(health.openaiConfigured?'var(--ok)':'var(--bad)')+'">'+(health.openaiConfigured?'ตั้งค่าแล้ว':'ยังไม่ตั้ง')+'</b></div>'+
+      '<div class="kv"><span>Gemini key (Veo)</span><b style="color:'+(health.geminiConfigured?'var(--ok)':'var(--bad)')+'">'+(health.geminiConfigured?'ตั้งค่าแล้ว':'ยังไม่ตั้ง')+'</b></div>'+
+      '<div class="kv"><span>Veo model</span><b>'+esc(health.veoModel)+'</b></div>'+
+      '<div class="kv"><span>เกณฑ์ผ่าน (match)</span><b>'+esc(health.matchThreshold)+'</b></div>'; }
+  else b.innerHTML='<div class="muted">เชื่อม backend ไม่ได้</div>';
+  setmodal.style.display='flex';
+};
+function closeSet(){ setmodal.style.display='none'; }
+setmodal.onclick=e=>{ if(e.target===setmodal) closeSet(); };
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeSet(); });
+
+boot();
+</script>
+</body>
+</html>

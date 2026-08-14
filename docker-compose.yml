@@ -1,0 +1,22 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      DATA_DIR: "/data"
+      # Keys are read from a local .env file (see .env.example). Never commit real keys.
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      OPENAI_MODEL: "${OPENAI_MODEL:-gpt-4o}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      GEMINI_VISION_MODEL: "${GEMINI_VISION_MODEL:-gemini-2.5-flash}"
+      VEO_MODEL: "${VEO_MODEL:-veo-3.1-generate-preview}"
+      MATCH_THRESHOLD: "${MATCH_THRESHOLD:-75}"
+      MATCH_PROVIDER: "${MATCH_PROVIDER:-openai}"
+    volumes:
+      - studio16-data:/data
+    restart: unless-stopped
+
+volumes:
+  studio16-data:
