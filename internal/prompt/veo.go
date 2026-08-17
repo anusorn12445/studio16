@@ -63,12 +63,19 @@ func BuildVeo(p model.Product) string {
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "Full-frame vertical 9:16 portrait, 8-second single continuous take, no cuts — %s. The scene fills the whole frame edge to edge: no black bars, no letterboxing, no borders, no padding.\n\n", strings.TrimSuffix(F.Clip, "."))
-	fmt.Fprintf(&b, "SUBJECT: %s She wears %s in %s, with %s.%s\n\n", idBrief, garment, C, bottom, shoes)
+	hasRef := len(p.Images) > 0
+	subjGarment := garment + " in " + C
+	consist := fmt.Sprintf("CONSISTENCY: the garment's neckline, hem, fabric and %s colour stay identical every frame; the hem stays over the waistband, no skin between top and bottom; neutral daylight, no warm/yellow cast.\n\n", C)
+	if hasRef {
+		subjGarment = "the same garment as in the first frame (do not restyle or recolour it)"
+		consist = "CONSISTENCY: keep the garment identical to the first frame — same neckline, sleeves, hem, fabric and colour — in every frame; the hem stays over the waistband, no skin between top and bottom; neutral daylight, no warm/yellow cast.\n\n"
+	}
+	fmt.Fprintf(&b, "SUBJECT: %s She wears %s, with %s.%s\n\n", idBrief, subjGarment, bottom, shoes)
 	fmt.Fprintf(&b, "AUDIO: %s\n\n", audioLine)
 	fmt.Fprintf(&b, "SETTING: %s\n\n", trimRunes(F.Setting, 200))
 	b.WriteString("CAMERA: phone locked on a tripod, fixed 9:16 framing, eye/chest level. No drift, no dolly, no zoom; she stays the same size in frame; the background stays static.\n\n")
 	fmt.Fprintf(&b, "ACTION: %s\n\n", trimRunes(timing, 340))
-	fmt.Fprintf(&b, "CONSISTENCY: the garment's neckline, hem, fabric and %s colour stay identical every frame; the hem stays over the waistband, no skin between top and bottom; neutral daylight, no warm/yellow cast.\n\n", C)
+	b.WriteString(consist)
 	b.WriteString("Avoid: black bars, letterboxing, borders or padding, any English speech, camera drift or zoom, changing the garment, exposed waist, extra people, on-screen text or logos, distorted hands, robotic motion.")
 
 	return trimRunes(b.String(), 1700)
@@ -91,12 +98,22 @@ func BuildVeoImage(p model.Product) string {
 	idBrief := firstSentence(base.Identity)
 	styleBrief := firstSentence(base.Style)
 
+	// When the product has reference photos, the PHOTO is the source of truth —
+	// do not let the (possibly default/unanalyzed) text spec fight it.
+	hasRef := len(p.Images) > 0
+	wearLine := "She wears " + garment + " in " + C
+	authLine := "Neutral daylight white balance, clean true colour, realistic skin and texture."
+	if hasRef {
+		wearLine = "She wears the exact garment shown in the attached reference photo — the same type, cut, neckline, sleeves, hem, fabric and colour"
+		authLine = "The attached reference photo is the exact source of truth for the garment: reproduce it faithfully — do not restyle it, do not change the neckline, sleeves or length, and do not change its colour. Keep the model's face and styling as described. Neutral daylight, realistic skin and texture."
+	}
+
 	var b strings.Builder
-	fmt.Fprintf(&b, "A full-frame vertical 9:16 portrait photo that fills the entire frame edge to edge — no black bars, no letterboxing, no borders, no padding. %s She wears %s in %s, with %s.%s\n\n", idBrief, garment, C, bottom, shoes)
+	fmt.Fprintf(&b, "A full-frame vertical 9:16 portrait photo that fills the entire frame edge to edge — no black bars, no letterboxing, no borders, no padding. %s %s, with %s.%s\n\n", idBrief, wearLine, bottom, shoes)
 	fmt.Fprintf(&b, "%s\n\n", trimRunes(styleBrief, 200))
-	fmt.Fprintf(&b, "SETTING: %s\n\n", trimRunes(F.Setting, 260))
-	fmt.Fprintf(&b, "%s\n\n", trimRunes(F.Pose1, 320))
-	b.WriteString("Use the attached reference photo as the exact source of truth for the garment — copy its neckline, sleeves, hem and fabric, changing only the colour to the stated one. Neutral daylight white balance, clean true colour, realistic skin and texture. Full-bleed 9:16 portrait, no black bars or borders, no text, no logos, no watermark.")
+	fmt.Fprintf(&b, "SETTING: %s\n\n", trimRunes(F.Setting, 240))
+	fmt.Fprintf(&b, "%s\n\n", trimRunes(F.Pose1, 300))
+	b.WriteString(authLine + " Full-bleed 9:16 portrait, no black bars or borders, no text, no logos, no watermark.")
 
 	return trimRunes(b.String(), 1600)
 }
