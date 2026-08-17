@@ -42,6 +42,9 @@ func BuildVeo(p model.Product, o VeoOpts) string {
 	timing := T(strings.Join(F.T1, " "))
 	if p.Format == "hyrox" {
 		timing = hyroxSceneAt(o.Scene).action // each shot = a different HYROX exercise
+		// HYROX styles the top with proper athletic wear, never jeans/casual trousers.
+		bottom = "high-waisted black athletic training leggings"
+		shoes = " supportive training shoes on her feet."
 	}
 
 	// Give Veo an actual Thai line to speak (from the product script, else a
@@ -119,6 +122,10 @@ func BuildVeoImage(p model.Product, o VeoOpts) string {
 	if F.Feet {
 		shoes = " " + Sanitize(EnOnly(p.Shoes, "plain white sneakers")) + " on her feet."
 	}
+	if p.Format == "hyrox" {
+		bottom = "high-waisted black athletic training leggings"
+		shoes = " supportive training shoes on her feet."
+	}
 	idBrief := firstSentence(base.Identity)
 	styleBrief := firstSentence(base.Style)
 
@@ -142,9 +149,9 @@ func BuildVeoImage(p model.Product, o VeoOpts) string {
 	}
 	fmt.Fprintf(&b, "SETTING: %s\n\n", trimRunes(F.Setting, 240))
 	fmt.Fprintf(&b, "%s\n\n", trimRunes(pose, 300))
-	b.WriteString(authLine + " Full-bleed 9:16 portrait, no black bars or borders, no text, no logos, no watermark.")
+	b.WriteString(authLine + " Keep the SAME woman across every shot: if one of the attached images is a character reference showing a person, copy her exact face, hair and skin tone and do not invent a new person. Full-bleed 9:16 portrait, no black bars or borders, no text, no logos, no watermark.")
 
-	return trimRunes(b.String(), 1600)
+	return trimRunes(b.String(), 1700)
 }
 
 // firstSentence returns text up to (and including) the first sentence-ending period.

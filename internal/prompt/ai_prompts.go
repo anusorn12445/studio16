@@ -122,14 +122,9 @@ func MatchPrompt(numRefs int, specText string) string {
 		b.WriteString(specText)
 		b.WriteString("\n---\n\n")
 	}
-	b.WriteString("Compare neckline shape and depth, strap width and spacing, hem position, fabric texture, colour, and any print or trim. A different neckline, thicker straps, a missing pattern, the wrong colour, or a bra/crop-top substitution are all serious mismatches.\n\n")
-	b.WriteString("SEPARATELY, look for AI-generation defects in the candidate and list them under \"issues\": distorted hands or extra/missing fingers, an unnatural, twisted or garbled mouth (a bad lip-sync / speech look), a warped or melted face, garbled or gibberish text, or extra limbs. These are quality problems, not product mismatches.\n\n")
-	b.WriteString("Reply with ONLY this JSON object, no prose, no markdown fences:\n")
-	b.WriteString(`{
- "score": 0-100 integer — 100 means indistinguishable from the real product, 0 means a completely different garment,
- "verdict": "one short Thai sentence summarising whether the candidate matches the product",
- "mismatches": ["short Thai phrase per concrete product difference, empty array if none"],
- "issues": ["short Thai phrase per visual defect — hands/fingers, mouth/face, artifacts — empty array if none"]
-}`)
+	b.WriteString("Be LENIENT and judge OVERALL resemblance, not pixel-perfection. Score how similar the candidate is to the real product on: same/similar logo or branding, same/similar label or lettering, a similar colour family, and a similar overall garment type and shape. A candidate that is about 80% similar (right type, right logo/label, close colour and shape) should score 80 or above and PASS. Differences from pose, camera angle, lighting, cropping, small folds or minor styling do NOT lower the score. Only a clearly different garment — a different type, a wrong or missing logo, or a completely different colour — is a real mismatch.\n\n")
+	b.WriteString("SEPARATELY, list obvious AI defects under \"issues\": clearly distorted hands or extra fingers, a badly warped mouth or face, or garbled text. Keep it short; ignore minor imperfections.\n\n")
+	b.WriteString("Keep every string SHORT. Reply with ONLY this JSON object, no prose, no markdown, no code fences:\n")
+	b.WriteString(`{"score": <0-100 integer>, "verdict": "<short Thai phrase, <=10 words>", "mismatches": [<short Thai phrases, or empty>], "issues": [<short Thai phrases, or empty>]}`)
 	return b.String()
 }

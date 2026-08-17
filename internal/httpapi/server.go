@@ -504,12 +504,11 @@ func (s *Server) generate(w http.ResponseWriter, r *http.Request) {
 	// Plan the shots as a connected story (hook → body → close). Each shot gets
 	// its own line + role (story) and its own scene index (a different exercise
 	// for hyrox). Uploaded photos also gate the image: mismatch → no video.
-	vid := s.curVid()
 	beats := prompt.PlanBeats(pp, shots)
-	jobs := make([]*model.Job, 0, len(beats))
+	reqs := make([]video.Request, 0, len(beats))
 	for i, beat := range beats {
 		o := prompt.VeoOpts{Line: beat.Line, Role: beat.Role, Part: i + 1, Total: len(beats), Scene: i}
-		job, err := vid.Start(id, video.Request{
+		reqs = append(reqs, video.Request{
 			Format:          pp.Format,
 			AudioMode:       pp.AudioMode,
 			VideoPrompt:     prompt.BuildVeo(pp, o),
@@ -522,11 +521,11 @@ func (s *Server) generate(w http.ResponseWriter, r *http.Request) {
 			Threshold:       threshold,
 			SpecText:        spec,
 		})
-		if err != nil {
-			writeErr(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		jobs = append(jobs, job)
+	}
+	jobs, err := s.curVid().StartBatch(id, reqs)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 	writeJSON(w, http.StatusAccepted, jobs)
 }

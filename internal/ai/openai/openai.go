@@ -121,14 +121,14 @@ func (c *Client) AnalyzePhotos(ctx context.Context, imgs []ai.Image, shopDesc, f
 }
 
 func (c *Client) GenerateText(ctx context.Context, promptText string) (string, error) {
-	return c.chat(ctx, nil, promptText, 700)
+	return c.chat(ctx, nil, promptText, 1500)
 }
 
 func (c *Client) ScoreMatch(ctx context.Context, refs []ai.Image, candidate ai.Image, specText string) (ai.MatchResult, error) {
 	// Reference photos first, then the candidate to be judged.
 	imgs := append([]ai.Image{}, refs...)
 	imgs = append(imgs, candidate)
-	out, err := c.chat(ctx, imgs, prompt.MatchPrompt(len(refs), specText), 900)
+	out, err := c.chat(ctx, imgs, prompt.MatchPrompt(len(refs), specText), 1800)
 	if err != nil {
 		return ai.MatchResult{}, err
 	}
