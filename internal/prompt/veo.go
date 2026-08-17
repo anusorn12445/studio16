@@ -41,7 +41,17 @@ func BuildVeo(p model.Product) string {
 	}
 	timing := T(strings.Join(F.T1, " "))
 
-	audioLine := "She talks naturally in Thai about this garment only — its fit, fabric and colour; her voice only, quiet ambience, no music."
+	// Give Veo an actual Thai line to speak (from the product script, else a
+	// simple fallback) so it speaks Thai instead of improvising English.
+	sc := ActiveScript(p)
+	thaiLine := "ชิ้นนี้เนื้อผ้าดี ใส่สบาย ทรงสวยมากเลยค่ะ ลองดูนะคะ"
+	if strings.TrimSpace(p.TypeTh) != "" {
+		thaiLine = "ชิ้นนี้" + strings.TrimSpace(p.TypeTh) + " เนื้อผ้าดี ใส่สบาย ทรงสวยมากเลยค่ะ แนะนำเลย"
+	}
+	if strings.TrimSpace(sc[0]) != "" {
+		thaiLine = strings.TrimSpace(sc[0])
+	}
+	audioLine := `She speaks THAI only (ภาษาไทย) — never English. Warm and casual, like chatting with a friend, she says: "` + thaiLine + `" Her voice only, quiet natural ambience, no music, no second speaker.`
 	switch AM {
 	case "laugh":
 		audioLine = "No spoken words — only a soft natural laugh and quiet breathing; no music."
@@ -52,16 +62,16 @@ func BuildVeo(p model.Product) string {
 	idBrief := firstSentence(base.Identity)
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "Vertical 9:16, 8-second single continuous take, no cuts — %s.\n\n", strings.TrimSuffix(F.Clip, "."))
+	fmt.Fprintf(&b, "Full-frame vertical 9:16 portrait, 8-second single continuous take, no cuts — %s. The scene fills the whole frame edge to edge: no black bars, no letterboxing, no borders, no padding.\n\n", strings.TrimSuffix(F.Clip, "."))
 	fmt.Fprintf(&b, "SUBJECT: %s She wears %s in %s, with %s.%s\n\n", idBrief, garment, C, bottom, shoes)
-	fmt.Fprintf(&b, "SETTING: %s\n\n", trimRunes(F.Setting, 240))
-	b.WriteString("CAMERA: phone locked on a tripod, fixed 9:16 framing, eye/chest level. No drift, no dolly, no push-in, no zoom; she stays the same size in frame; the background stays completely static.\n\n")
-	fmt.Fprintf(&b, "ACTION: %s\n\n", timing)
-	fmt.Fprintf(&b, "CONSISTENCY: the garment's neckline, hem, fabric and %s colour stay identical in every frame; the hem stays over the waistband with no skin between top and bottom; neutral daylight white balance, no warm or yellow cast.\n\n", C)
 	fmt.Fprintf(&b, "AUDIO: %s\n\n", audioLine)
-	b.WriteString("Avoid: camera drift or zoom, changing the garment, exposed waist, extra people, on-screen text or logos, distorted hands, robotic motion.")
+	fmt.Fprintf(&b, "SETTING: %s\n\n", trimRunes(F.Setting, 200))
+	b.WriteString("CAMERA: phone locked on a tripod, fixed 9:16 framing, eye/chest level. No drift, no dolly, no zoom; she stays the same size in frame; the background stays static.\n\n")
+	fmt.Fprintf(&b, "ACTION: %s\n\n", trimRunes(timing, 340))
+	fmt.Fprintf(&b, "CONSISTENCY: the garment's neckline, hem, fabric and %s colour stay identical every frame; the hem stays over the waistband, no skin between top and bottom; neutral daylight, no warm/yellow cast.\n\n", C)
+	b.WriteString("Avoid: black bars, letterboxing, borders or padding, any English speech, camera drift or zoom, changing the garment, exposed waist, extra people, on-screen text or logos, distorted hands, robotic motion.")
 
-	return trimRunes(b.String(), 1500)
+	return trimRunes(b.String(), 1700)
 }
 
 // BuildVeoImage produces a COMPACT image prompt for the opening frame: the
@@ -82,13 +92,13 @@ func BuildVeoImage(p model.Product) string {
 	styleBrief := firstSentence(base.Style)
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "A vertical 9:16 photo. %s She wears %s in %s, with %s.%s\n\n", idBrief, garment, C, bottom, shoes)
+	fmt.Fprintf(&b, "A full-frame vertical 9:16 portrait photo that fills the entire frame edge to edge — no black bars, no letterboxing, no borders, no padding. %s She wears %s in %s, with %s.%s\n\n", idBrief, garment, C, bottom, shoes)
 	fmt.Fprintf(&b, "%s\n\n", trimRunes(styleBrief, 200))
 	fmt.Fprintf(&b, "SETTING: %s\n\n", trimRunes(F.Setting, 260))
 	fmt.Fprintf(&b, "%s\n\n", trimRunes(F.Pose1, 320))
-	b.WriteString("Use the attached reference photo as the exact source of truth for the garment — copy its neckline, sleeves, hem and fabric, changing only the colour to the stated one. Neutral daylight white balance, clean true colour, realistic skin and texture. No text, no logos, no watermark.")
+	b.WriteString("Use the attached reference photo as the exact source of truth for the garment — copy its neckline, sleeves, hem and fabric, changing only the colour to the stated one. Neutral daylight white balance, clean true colour, realistic skin and texture. Full-bleed 9:16 portrait, no black bars or borders, no text, no logos, no watermark.")
 
-	return trimRunes(b.String(), 1500)
+	return trimRunes(b.String(), 1600)
 }
 
 // firstSentence returns text up to (and including) the first sentence-ending period.

@@ -86,8 +86,11 @@ func (m *Manager) run(productID, jobID, videoPrompt, imagePrompt string, refs []
 			}
 			// else: keep going with the uploaded reference photo as the frame
 		} else {
+			// Force the first frame to exactly 9:16 so Veo does not letterbox it.
+			img.Data = cropTo916(img.Data)
+			img.Mime = "image/jpeg"
 			frame = &img
-			if path, e := m.store.SaveAsset(productID, jobID+".frame.png", img.Data); e == nil {
+			if path, e := m.store.SaveAsset(productID, jobID+".frame.jpg", img.Data); e == nil {
 				m.setJob(productID, jobID, func(j *model.Job) { j.ImagePath = path })
 			}
 		}
