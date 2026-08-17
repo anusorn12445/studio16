@@ -101,6 +101,7 @@ video{width:100%;border-radius:9px;border:1px solid var(--line);background:#000}
 </div>
 
 <div id="toast"></div>
+<div id="mmpop" style="position:fixed;top:14px;right:14px;z-index:75;display:none;max-width:320px;background:var(--panel);border:1px solid var(--bad);border-radius:12px;padding:12px 14px;box-shadow:0 6px 22px rgba(0,0,0,.45)"></div>
 <div class="modal" id="vmodal" style="align-items:center">
   <div style="position:relative;max-width:96vw">
     <button class="btn" style="position:absolute;top:-42px;right:0" onclick="closeVideo()">✕ ปิด</button>
@@ -269,6 +270,7 @@ async function newProduct(){
 
 function renderMain(){
   stopPoll();
+  updateMismatchPopup();
   if(nav==='clip') return clipView();
   if(nav==='prompts') return promptsView();
   if(nav==='characters') return charView();
@@ -413,24 +415,42 @@ function videoPanel(p){
 }
 function jobCard(j){
   const s=j.status;
-  const col=s==='done'?'var(--ok)':s==='error'?'var(--bad)':'var(--lilac)';
-  const ic=s==='done'?'✓':s==='error'?'✕':'◴';
-  const label={queued:'เข้าคิว',image:'ขั้น 1/2 · กำลังสร้างภาพ…',running:'ขั้น 2/2 · เรนเดอร์วิดีโอ…',done:'เสร็จ',error:'ผิดพลาด'}[s]||s;
+  const bad=(s==='error'||s==='mismatch');
+  const col=s==='done'?'var(--ok)':bad?'var(--bad)':'var(--lilac)';
+  const ic=s==='done'?'✓':bad?'✕':'◴';
+  let label={queued:'เข้าคิว',image:'ขั้น 1/2 · สร้างภาพ',checking:'กำลังตรวจสินค้า…',running:'ขั้น 2/2 · เรนเดอร์วิดีโอ…',done:'เสร็จ',error:'ผิดพลาด',mismatch:'สินค้าไม่ตรง'}[s]||s;
+  if(s==='image'&&j.attempt) label+=' (ครั้งที่ '+j.attempt+'/3)';
+  const score=(j.matchScore?'<span class="muted" style="font-size:11.5px;margin-left:8px">คะแนนตรง '+j.matchScore+'</span>':'');
   const media=[];
   if(j.imagePath) media.push('<div><div class="lbl" style="margin-bottom:4px">ภาพ</div>'+imageThumb(assetURL(j.imagePath))+'</div>');
   if(s==='done'&&j.videoPath) media.push('<div><div class="lbl" style="margin-bottom:4px">วิดีโอ</div>'+videoThumb(assetURL(j.videoPath))+'</div>');
   const mediaHtml=media.length?'<div class="row" style="gap:10px;margin-top:8px;align-items:flex-start">'+media.join('')+'</div>':'';
   const err=j.error?('<div class="risk" style="color:#FFC9C9">'+esc(j.error)+'</div>'):'';
+  const regen=(s==='mismatch')?'<button class="btn" style="margin-top:8px;padding:6px 11px;font-size:12px" onclick="regenJob(\''+j.id+'\')">🔄 เจนภาพใหม่ฉากนี้</button>':'';
   return '<div style="margin-bottom:12px"><div class="card"><span class="ic" style="background:rgba(255,255,255,.06);color:'+col+'">'+ic+'</span>'+
-    '<div style="flex:1"><div style="font-size:13px">'+esc(j.format)+' · '+esc(j.audioMode)+(j.durationSeconds?(' · '+j.durationSeconds+' วิ'):'')+'</div><div class="muted" style="font-size:11.5px">'+esc(j.provider||'')+'</div></div>'+
-    '<span style="font-size:12px;color:'+col+'">'+label+'</span></div>'+err+mediaHtml+'</div>';
+    '<div style="flex:1"><div style="font-size:13px">'+esc(j.format)+' · '+esc(j.audioMode)+(j.durationSeconds?(' · '+j.durationSeconds+' วิ'):'')+score+'</div><div class="muted" style="font-size:11.5px">'+esc(j.provider||'')+'</div></div>'+
+    '<span style="font-size:12px;color:'+col+'">'+label+'</span></div>'+err+regen+mediaHtml+'</div>';
 }
-function jobBusy(j){ return j.status==='queued'||j.status==='image'||j.status==='running'; }
+function jobBusy(j){ return j.status==='queued'||j.status==='image'||j.status==='checking'||j.status==='running'; }
+const HYROX_NAMES=['วอลบอล','เข็นสเลด','battle ropes','farmers carry','sandbag lunge','เบอร์ปี'];
+function sceneName(j){ return (j.format==='hyrox'&&HYROX_NAMES[j.scene]!=null)?HYROX_NAMES[j.scene]:((j.scene!=null?('ฉาก '+(j.scene+1)):'')+' '+esc(j.format)); }
+function regenJob(jobId){ jpost('/api/products/'+cur+'/jobs/'+jobId+'/regen',{}).then(()=>{ toast('กำลังเจนภาพใหม่'); startPoll(); if(nav==='clip'&&tab==='video') clipView(); updateMismatchPopup(); }).catch(e=>toast(e.message,1)); }
+function updateMismatchPopup(){
+  const pop=document.getElementById('mmpop'); if(!pop) return;
+  const prod=getCur(); const bad=prod?(prod.jobs||[]).filter(j=>j.status==='mismatch'):[];
+  if(!bad.length){ pop.style.display='none'; pop.innerHTML=''; return; }
+  pop.style.display='block';
+  pop.innerHTML='<div style="font-weight:600;margin-bottom:8px;color:#FFC08A">⚠️ สินค้าไม่ตรง '+bad.length+' ฉาก</div>'+
+    bad.map(j=>'<div class="row" style="gap:8px;margin-top:6px;justify-content:space-between"><span style="font-size:12.5px">'+sceneName(j)+' · คะแนน '+(j.matchScore||0)+'</span><button class="btn" style="padding:4px 9px;font-size:12px" onclick="regenJob(\''+j.id+'\')">เจนใหม่</button></div>').join('')+
+    '<div class="muted" style="font-size:11px;margin-top:8px">กดเจนใหม่จนสินค้าตรง แล้วจะทำวิดีโอต่อให้เอง</div>';
+}
 function startPoll(){ stopPoll(); pollTimer=setInterval(async()=>{ try{
   const p=await api('/api/products/'+cur); const i=products.findIndex(x=>x.id===cur); if(i>=0) products[i]=p;
   if(nav==='clip'&&tab==='video') videoPanel(p);
+  updateMismatchPopup();
   if(!(p.jobs||[]).some(jobBusy)){
     stopPoll();
+    updateMismatchPopup();
     const hasDoneClip=(p.jobs||[]).some(j=>j.status==='done'&&j.videoPath);
     if(autoReportPending && hasDoneClip){ autoReportPending=false; nav='clip'; tab='report'; renderNav(); clipView(); toast('เจนเสร็จ — กำลังตรวจรีพอทให้'); runReport(); }
   }

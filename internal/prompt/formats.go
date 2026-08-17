@@ -170,10 +170,10 @@ var FORMATS = []Format{
 		Feet:  true,
 
 		Props:   `Nothing in her hands.`,
-		Setting: `A bright indoor functional-fitness arena in the style of a HYROX race: black rubber flooring beside a lane of artificial turf, a weighted sled resting on the turf, a neat stack of wall balls, a rowing machine and a row of sandbags along the back wall, matte black rig frames. High industrial ceiling with even white lighting. The layout is fixed: the equipment never moves and no additional objects appear.`,
-		Light:   `Bright even indoor sports-hall lighting around 5000K, clean and neutral, flat and soft across the whole body with no hard shadows. No coloured stage lights, no haze, no spotlights. The colour temperature and intensity stay constant from the first frame to the last.`,
+		Setting: `A big indoor HYROX race arena: wide marked lanes of black artificial turf with white boundary lines, HYROX-style stations set along the lane — a weighted sled, a stack of wall balls, heavy battle ropes, kettlebells and sandbags — matte black rig frames and tall industrial lighting overhead. Other lanes and a few distant athletes sit softly out of focus in the far background for atmosphere; her own lane and station stay clear. The layout is fixed and the background stays static.`,
+		Light:   `Bright even indoor sports-arena lighting around 5000K, clean and neutral, flat and soft across the whole body with no hard shadows. No coloured stage lights, no haze, no spotlights on her. The colour temperature and intensity stay constant from the first frame to the last.`,
 		Camera:  `Vertical 9:16, shot on a phone locked on a tripod at chest height, straight on and square, fixed framing at a fixed distance. Only micro-jitter of one or two pixels, no drift, no dolly, no push-in, no pull-back. She occupies the same proportion of the frame in the last second as in the first. Framed full length from just above the top of her head down to her shoes.`,
-		Neg:     `no other athletes, no crowd, no coach, no referee, no spectators, no barbell, no dropped weights, no chalk cloud, no coloured stage lighting, no haze, no smoke, no motion blur on the body,`,
+		Neg:     `no one else in her lane, no coach or referee beside her, no sharp foreground crowd, no barbell, no dropped weights, no chalk cloud, no coloured stage lighting, no haze, no smoke, no motion blur on the garment,`,
 		Clip:    `sportswear review video`,
 		Cont:    `same arena, same outfit, same light`,
 

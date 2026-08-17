@@ -88,6 +88,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/products/{id}/script", s.makeScript)
 	mux.HandleFunc("GET /api/products/{id}/prompt", s.buildPrompt)
 	mux.HandleFunc("POST /api/products/{id}/generate", s.generate)
+	mux.HandleFunc("POST /api/products/{id}/jobs/{jobId}/regen", s.regenJob)
 	mux.HandleFunc("GET /api/products/{id}/report", s.getReport)
 	mux.HandleFunc("POST /api/products/{id}/report", s.runReport)
 
@@ -472,10 +473,6 @@ func (s *Server) generate(w http.ResponseWriter, r *http.Request) {
 	if req.Audio != "" {
 		pp.AudioMode = req.Audio
 	}
-	// Two-step, both with SHORT prompts: generate an opening-frame image first
-	// (BuildVeoImage), then animate it with Veo (per-shot BuildVeo). Uploaded
-	// product photos are the garment reference and the fallback first frame.
-	imagePrompt := prompt.BuildVeoImage(pp)
 	refs, _ := s.loadImages(p, 3)
 	var firstFrame *ai.Image
 	if len(refs) > 0 {
@@ -501,14 +498,30 @@ func (s *Server) generate(w http.ResponseWriter, r *http.Request) {
 		shots = 4
 	}
 
-	// Plan the shots as a connected story (hook → body → close) and give each
-	// shot its own line + role so the clips tell one continuous story.
+	provider, threshold := s.matchCfg()
+	spec := match.SpecText(p)
+
+	// Plan the shots as a connected story (hook → body → close). Each shot gets
+	// its own line + role (story) and its own scene index (a different exercise
+	// for hyrox). Uploaded photos also gate the image: mismatch → no video.
 	vid := s.curVid()
 	beats := prompt.PlanBeats(pp, shots)
 	jobs := make([]*model.Job, 0, len(beats))
 	for i, beat := range beats {
-		vp := prompt.BuildVeo(pp, prompt.VeoOpts{Line: beat.Line, Role: beat.Role, Part: i + 1, Total: len(beats)})
-		job, err := vid.Start(id, pp.Format, pp.AudioMode, vp, imagePrompt, refs, firstFrame, dur)
+		o := prompt.VeoOpts{Line: beat.Line, Role: beat.Role, Part: i + 1, Total: len(beats), Scene: i}
+		job, err := vid.Start(id, video.Request{
+			Format:          pp.Format,
+			AudioMode:       pp.AudioMode,
+			VideoPrompt:     prompt.BuildVeo(pp, o),
+			ImagePrompt:     prompt.BuildVeoImage(pp, o),
+			Refs:            refs,
+			FirstFrame:      firstFrame,
+			DurationSeconds: dur,
+			Scene:           i,
+			Checker:         s.analyzer(provider),
+			Threshold:       threshold,
+			SpecText:        spec,
+		})
 		if err != nil {
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return
@@ -516,6 +529,49 @@ func (s *Server) generate(w http.ResponseWriter, r *http.Request) {
 		jobs = append(jobs, job)
 	}
 	writeJSON(w, http.StatusAccepted, jobs)
+}
+
+// regenJob re-runs an existing shot (after a mismatch): it regenerates the image
+// (with the same scene/prompt) and, if it now matches, continues to the video.
+func (s *Server) regenJob(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	jobID := r.PathValue("jobId")
+	p, err := s.store.Get(id)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	var job *model.Job
+	for i := range p.Jobs {
+		if p.Jobs[i].ID == jobID {
+			job = &p.Jobs[i]
+			break
+		}
+	}
+	if job == nil {
+		writeErr(w, http.StatusNotFound, "job not found")
+		return
+	}
+	refs, _ := s.loadImages(p, 3)
+	var firstFrame *ai.Image
+	if len(refs) > 0 {
+		firstFrame = &refs[0]
+	}
+	provider, threshold := s.matchCfg()
+	s.curVid().Rerun(id, jobID, video.Request{
+		Format:          job.Format,
+		AudioMode:       job.AudioMode,
+		VideoPrompt:     job.Prompt,
+		ImagePrompt:     job.ImagePrompt,
+		Refs:            refs,
+		FirstFrame:      firstFrame,
+		DurationSeconds: job.DurationSeconds,
+		Scene:           job.Scene,
+		Checker:         s.analyzer(provider),
+		Threshold:       threshold,
+		SpecText:        match.SpecText(p),
+	})
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "regenerating"})
 }
 
 func (s *Server) getReport(w http.ResponseWriter, r *http.Request) {

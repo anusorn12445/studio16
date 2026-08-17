@@ -40,6 +40,9 @@ func BuildVeo(p model.Product, o VeoOpts) string {
 		}
 	}
 	timing := T(strings.Join(F.T1, " "))
+	if p.Format == "hyrox" {
+		timing = hyroxSceneAt(o.Scene).action // each shot = a different HYROX exercise
+	}
 
 	// Give Veo an actual Thai line to speak (from the product script, else a
 	// simple fallback) so it speaks Thai instead of improvising English.
@@ -105,7 +108,7 @@ func BuildVeo(p model.Product, o VeoOpts) string {
 // BuildVeoImage produces a COMPACT image prompt for the opening frame: the
 // model wearing the garment in the scene (Pose 1). This image is generated
 // first, then handed to Veo as the video's first frame.
-func BuildVeoImage(p model.Product) string {
+func BuildVeoImage(p model.Product, o VeoOpts) string {
 	F := fmtFor(p.Format)
 	base := ResolveBase(p)
 
@@ -132,8 +135,13 @@ func BuildVeoImage(p model.Product) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "A full-frame vertical 9:16 portrait photo that fills the entire frame edge to edge — no black bars, no letterboxing, no borders, no padding. %s %s, with %s.%s\n\n", idBrief, wearLine, bottom, shoes)
 	fmt.Fprintf(&b, "%s\n\n", trimRunes(styleBrief, 200))
+	pose := F.Pose1
+	if p.Format == "hyrox" {
+		s := hyroxSceneAt(o.Scene)
+		pose = "POSE — " + s.name + ": she is " + s.pose + ", wearing the activewear, mid-workout, athletic and focused, showing how the outfit sits and holds under real effort."
+	}
 	fmt.Fprintf(&b, "SETTING: %s\n\n", trimRunes(F.Setting, 240))
-	fmt.Fprintf(&b, "%s\n\n", trimRunes(F.Pose1, 300))
+	fmt.Fprintf(&b, "%s\n\n", trimRunes(pose, 300))
 	b.WriteString(authLine + " Full-bleed 9:16 portrait, no black bars or borders, no text, no logos, no watermark.")
 
 	return trimRunes(b.String(), 1600)
@@ -155,6 +163,33 @@ type VeoOpts struct {
 	Role  string // "hook" | "story" | "close" | ""
 	Part  int    // 1-based part index
 	Total int    // total parts in this story
+	Scene int    // 0-based scene index — for hyrox, picks a different exercise per shot
+}
+
+// hyroxScene is one HYROX exercise: a first-frame pose and an 8-second action.
+type hyroxScene struct{ name, pose, action string }
+
+var hyroxScenes = []hyroxScene{
+	{"wall balls", "holding a weighted wall ball at her chest in a quarter-squat, ready to throw it to the target overhead",
+		"She does wall-ball reps: from a deep squat she drives up and throws the ball to the wall target overhead, catches it back at her chest and squats again, talking to camera between reps. The top never rides up and no skin shows at the waist."},
+	{"sled push", "leaning low into a weighted HYROX sled with both arms extended on the posts, ready to drive it forward",
+		"She drives the weighted HYROX sled forward across the turf, pushing hard and low through her legs, then straightens and talks to camera, breathing. The activewear stays in place under the load."},
+	{"battle ropes", "in a low athletic half-squat gripping the ends of two heavy battle ropes, arms ready",
+		"She slams two heavy battle ropes in fast alternating waves from a low athletic stance, then eases off and talks to camera. The top stays put and opaque through the movement."},
+	{"farmers carry", "standing tall holding a heavy kettlebell in each hand at her sides, ready to walk",
+		"She takes controlled steps carrying a heavy kettlebell in each hand (farmers carry), shoulders braced and tall, then sets them down and talks to camera. The leggings stay put and squat-proof."},
+	{"sandbag lunges", "a heavy sandbag hugged across the front of her shoulders, ready to lunge",
+		"She performs walking lunges with a sandbag across her shoulders, dropping into deep lunges, then stands and talks to camera. The fabric stretches but stays opaque and in place."},
+	{"burpees", "standing tall at the top of a burpee, arms coming down after the jump, breathing",
+		"She does a full burpee — squat, hands to the floor, jump back to a plank, jump in and stand with a hop — then talks to camera, breathing. The top stays down, no skin at the waist."},
+}
+
+func hyroxSceneAt(i int) hyroxScene {
+	n := len(hyroxScenes)
+	if n == 0 {
+		return hyroxScene{}
+	}
+	return hyroxScenes[((i%n)+n)%n]
 }
 
 // Beat is one planned shot: which line to speak and its narrative role.

@@ -31,16 +31,35 @@ func NewManager(gen Generator, st *store.Store) *Manager {
 	return &Manager{gen: gen, store: st, pollEvery: 10 * time.Second, timeout: 15 * time.Minute}
 }
 
+// Request bundles everything one shot needs, including the optional image
+// quality gate (Checker + Threshold + SpecText).
+type Request struct {
+	Format          string
+	AudioMode       string
+	VideoPrompt     string
+	ImagePrompt     string
+	Refs            []ai.Image
+	FirstFrame      *ai.Image
+	DurationSeconds int
+	Scene           int
+
+	Checker   ai.Analyzer // scores the generated image vs the product; nil = no gate
+	Threshold int
+	SpecText  string
+}
+
 // Start creates a job on the product, kicks off generation and returns the job
 // immediately. The job is polled to completion in a background goroutine.
-func (m *Manager) Start(productID, format, audioMode, videoPrompt, imagePrompt string, refs []ai.Image, firstFrame *ai.Image, durationSeconds int) (*model.Job, error) {
+func (m *Manager) Start(productID string, req Request) (*model.Job, error) {
 	now := time.Now().Unix()
 	job := &model.Job{
 		ID:              store.NewID("job"),
-		Format:          format,
-		AudioMode:       audioMode,
-		DurationSeconds: durationSeconds,
-		Prompt:          videoPrompt,
+		Format:          req.Format,
+		AudioMode:       req.AudioMode,
+		DurationSeconds: req.DurationSeconds,
+		Prompt:          req.VideoPrompt,
+		ImagePrompt:     req.ImagePrompt,
+		Scene:           req.Scene,
 		Provider:        m.gen.Name(),
 		Status:          "queued",
 		CreatedAt:       now,
@@ -53,8 +72,20 @@ func (m *Manager) Start(productID, format, audioMode, videoPrompt, imagePrompt s
 		return nil, err
 	}
 
-	go m.run(productID, job.ID, videoPrompt, imagePrompt, refs, firstFrame, durationSeconds)
+	go m.run(productID, job.ID, req)
 	return job, nil
+}
+
+// Rerun re-runs an existing job (used by the regenerate button after a mismatch).
+func (m *Manager) Rerun(productID, jobID string, req Request) {
+	m.setJob(productID, jobID, func(j *model.Job) {
+		j.Status = "queued"
+		j.Error = ""
+		j.VideoPath = ""
+		j.MatchScore = 0
+		j.Attempt = 0
+	})
+	go m.run(productID, jobID, req)
 }
 
 func (m *Manager) setJob(productID, jobID string, mutate func(*model.Job)) {
@@ -69,35 +100,65 @@ func (m *Manager) setJob(productID, jobID string, mutate func(*model.Job)) {
 	})
 }
 
-func (m *Manager) run(productID, jobID, videoPrompt, imagePrompt string, refs []ai.Image, firstFrame *ai.Image, durationSeconds int) {
+func (m *Manager) run(productID, jobID string, req Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), m.timeout)
 	defer cancel()
 
-	// Step 1 — generate the opening-frame image (if requested), then use it as
-	// Veo's first frame. Fall back to any uploaded reference photo on failure.
-	frame := firstFrame
-	if imagePrompt != "" {
-		m.setJob(productID, jobID, func(j *model.Job) { j.Status = "image" })
-		img, err := m.gen.GenerateImage(ctx, imagePrompt, refs)
-		if err != nil {
-			if frame == nil {
-				m.setJob(productID, jobID, func(j *model.Job) { j.Status = "error"; j.Error = "สร้างภาพเฟรมแรกไม่สำเร็จ: " + err.Error() })
-				return
+	// Step 1 — generate the opening-frame image (if requested). When a Checker
+	// is set, verify the image matches the product; retry up to 3 times, and if
+	// it still doesn't match, stop here (do NOT make the video) with status
+	// "mismatch" so the UI can offer a regenerate.
+	frame := req.FirstFrame
+	gate := req.Checker != nil && len(req.Refs) > 0
+	if req.ImagePrompt != "" {
+		matched := !gate
+		for attempt := 1; attempt <= 3; attempt++ {
+			m.setJob(productID, jobID, func(j *model.Job) { j.Status = "image"; j.Attempt = attempt })
+			img, err := m.gen.GenerateImage(ctx, req.ImagePrompt, req.Refs)
+			if err != nil {
+				if attempt >= 3 {
+					if frame == nil {
+						m.setJob(productID, jobID, func(j *model.Job) { j.Status = "error"; j.Error = "สร้างภาพไม่สำเร็จ: " + err.Error() })
+						return
+					}
+					break // fall back to the uploaded reference photo
+				}
+				continue
 			}
-			// else: keep going with the uploaded reference photo as the frame
-		} else {
-			// Force the first frame to exactly 9:16 so Veo does not letterbox it.
-			img.Data = cropTo916(img.Data)
+			img.Data = cropTo916(img.Data) // force exact 9:16, no black bars
 			img.Mime = "image/jpeg"
 			frame = &img
 			if path, e := m.store.SaveAsset(productID, jobID+".frame.jpg", img.Data); e == nil {
 				m.setJob(productID, jobID, func(j *model.Job) { j.ImagePath = path })
 			}
+			if !gate {
+				matched = true
+				break
+			}
+			m.setJob(productID, jobID, func(j *model.Job) { j.Status = "checking" })
+			mr, e := req.Checker.ScoreMatch(ctx, req.Refs, img, req.SpecText)
+			if e != nil {
+				matched = true // don't block on a failed check
+				break
+			}
+			m.setJob(productID, jobID, func(j *model.Job) { j.MatchScore = mr.Score })
+			if mr.Score >= req.Threshold {
+				matched = true
+				break
+			}
+			// else: not matching — loop and regenerate the image
+		}
+		if !matched {
+			m.setJob(productID, jobID, func(j *model.Job) {
+				j.Status = "mismatch"
+				j.Error = "สินค้าไม่ตรงหลังลองสร้างภาพ 3 ครั้ง — กดเจนใหม่"
+			})
+			return
 		}
 	}
 
 	// Step 2 — animate the frame into video with Veo.
-	opName, err := m.gen.StartVideo(ctx, videoPrompt, frame, durationSeconds)
+	opName, err := m.gen.StartVideo(ctx, req.VideoPrompt, frame, req.DurationSeconds)
 	if err != nil {
 		m.setJob(productID, jobID, func(j *model.Job) { j.Status = "error"; j.Error = err.Error() })
 		return

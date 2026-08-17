@@ -122,13 +122,17 @@ type Job struct {
 	DurationSeconds int    `json:"durationSeconds"`
 	Prompt          string `json:"prompt"`
 	Provider  string `json:"provider"` // "gemini-veo"
-	OpName    string `json:"opName"`   // provider operation id for polling
-	Status    string `json:"status"`   // queued | image | running | done | error
-	ImagePath string `json:"imagePath"` // generated first-frame image, if any
-	VideoPath string `json:"videoPath"`
-	Error     string `json:"error"`
-	CreatedAt int64  `json:"createdAt"`
-	UpdatedAt int64  `json:"updatedAt"`
+	OpName      string `json:"opName"`      // provider operation id for polling
+	Status      string `json:"status"`      // queued | image | checking | running | done | error | mismatch
+	ImagePath   string `json:"imagePath"`   // generated first-frame image, if any
+	ImagePrompt string `json:"imagePrompt"` // prompt used to generate the image (for regen)
+	Scene       int    `json:"scene"`       // scene/exercise index
+	Attempt     int    `json:"attempt"`     // current image-generation attempt (1..3)
+	MatchScore  int    `json:"matchScore"`  // last image match score vs the product
+	VideoPath   string `json:"videoPath"`
+	Error       string `json:"error"`
+	CreatedAt   int64  `json:"createdAt"`
+	UpdatedAt   int64  `json:"updatedAt"`
 }
 
 // Report is the AI product-match audit over reference photos and generated clips.

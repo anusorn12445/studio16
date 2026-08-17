@@ -28,8 +28,8 @@ func NewScorer(analyzer ai.Analyzer, st *store.Store, threshold int, ffmpeg stri
 	return &Scorer{analyzer: analyzer, store: st, threshold: threshold, ffmpeg: ffmpeg}
 }
 
-// specText renders the garment spec as plain text for the match instruction.
-func specText(p *model.Product) string {
+// SpecText renders the garment spec as plain text for the match instruction.
+func SpecText(p *model.Product) string {
 	var b strings.Builder
 	add := func(label, v string) {
 		if strings.TrimSpace(v) != "" {
@@ -85,7 +85,7 @@ func (s *Scorer) Run(ctx context.Context, productID string) (*model.Report, erro
 	if err != nil {
 		return nil, err
 	}
-	spec := specText(p)
+	spec := SpecText(p)
 
 	// Load all uploaded reference images.
 	type ref struct {
