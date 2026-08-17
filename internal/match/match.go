@@ -143,7 +143,35 @@ func (s *Scorer) Run(ctx context.Context, productID string) (*model.Report, erro
 		s.tally(report, item)
 	}
 
-	// 2) Score each finished clip's frame against the uploaded references.
+	// 2a) Score each generated first-frame image (the frames shown per shot).
+	for _, job := range p.Jobs {
+		if job.ImagePath == "" {
+			continue
+		}
+		img, err := s.readImage(job.ImagePath, "image/jpeg")
+		if err != nil {
+			continue
+		}
+		item := model.MatchItem{Kind: "ภาพ", RefID: job.ID, Path: job.ImagePath}
+		if len(refs) == 0 {
+			item.Verdict = "ไม่มีรูปสินค้าอ้างอิงให้เทียบ"
+			s.tally(report, item)
+			continue
+		}
+		mr, err := s.analyzer.ScoreMatch(ctx, imgsOf(refs), img, spec)
+		if err != nil {
+			item.Verdict = "ตรวจไม่สำเร็จ: " + err.Error()
+		} else {
+			item.Score = mr.Score
+			item.Verdict = mr.Verdict
+			item.Mismatches = mr.Mismatches
+			item.Issues = mr.Issues
+			item.Pass = mr.Score >= s.threshold
+		}
+		s.tally(report, item)
+	}
+
+	// 2b) Score each finished clip's frame against the uploaded references.
 	for _, job := range p.Jobs {
 		if job.Status != "done" || job.VideoPath == "" {
 			continue

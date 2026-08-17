@@ -99,8 +99,15 @@ func BuildVeo(p model.Product, o VeoOpts) string {
 	if roleNote != "" {
 		b.WriteString(roleNote + "\n\n")
 	}
-	fmt.Fprintf(&b, "SETTING: %s\n\n", trimRunes(F.Setting, 190))
-	b.WriteString("CAMERA: phone locked on a tripod, fixed 9:16 framing, eye/chest level. No drift, no dolly, no zoom; she stays the same size in frame; the background stays static.\n\n")
+	settingText := F.Setting
+	camLine := "CAMERA: phone locked on a tripod, fixed 9:16 framing, eye/chest level. No drift, no dolly, no zoom; she stays the same size in frame; the background stays static.\n\n"
+	if p.Format == "hyrox" {
+		s := hyroxSceneAt(o.Scene)
+		settingText = s.setting
+		camLine = "CAMERA: locked framing, " + s.camera + ". No drift, no dolly, no zoom; she stays the same size in frame; the background stays static.\n\n"
+	}
+	fmt.Fprintf(&b, "SETTING: %s\n\n", trimRunes(settingText, 200))
+	b.WriteString(camLine)
 	fmt.Fprintf(&b, "ACTION: %s\n\n", trimRunes(timing, 300))
 	b.WriteString(consist)
 	b.WriteString("Avoid: black bars, letterboxing, borders or padding, any English speech, camera drift or zoom, changing the garment, exposed waist, extra people, on-screen text or logos, distorted hands, robotic motion.")
@@ -143,12 +150,14 @@ func BuildVeoImage(p model.Product, o VeoOpts) string {
 	fmt.Fprintf(&b, "A full-frame vertical 9:16 portrait photo that fills the entire frame edge to edge — no black bars, no letterboxing, no borders, no padding. %s %s, with %s.%s\n\n", idBrief, wearLine, bottom, shoes)
 	fmt.Fprintf(&b, "%s\n\n", trimRunes(styleBrief, 200))
 	pose := F.Pose1
+	settingText := F.Setting
 	if p.Format == "hyrox" {
 		s := hyroxSceneAt(o.Scene)
-		pose = "THIS SHOT'S HYROX EXERCISE IS " + strings.ToUpper(s.name) + " — it must be clearly different from other shots. POSE — she is " + s.pose + ", wearing the activewear, mid-workout, athletic and focused, showing how the outfit sits and holds under real effort."
+		settingText = s.setting
+		pose = "THIS SHOT'S HYROX EXERCISE IS " + strings.ToUpper(s.name) + " — a brand-new HYROX competition scene, clearly different from every other shot. POSE — she is " + s.pose + ", wearing the activewear, mid-workout, athletic and focused. CAMERA: " + s.camera + "."
 	}
-	fmt.Fprintf(&b, "SETTING: %s\n\n", trimRunes(F.Setting, 240))
-	fmt.Fprintf(&b, "%s\n\n", trimRunes(pose, 300))
+	fmt.Fprintf(&b, "SETTING: %s\n\n", trimRunes(settingText, 300))
+	fmt.Fprintf(&b, "%s\n\n", trimRunes(pose, 360))
 	b.WriteString(authLine + " Use the attached photo for the GARMENT only, not for any person in it — the woman is the one described above. Full-bleed 9:16 portrait, no black bars or borders, no text, no logos, no watermark.")
 
 	return trimRunes(b.String(), 1700)
@@ -173,22 +182,53 @@ type VeoOpts struct {
 	Scene int    // 0-based scene index — for hyrox, picks a different exercise per shot
 }
 
-// hyroxScene is one HYROX exercise: a first-frame pose and an 8-second action.
-type hyroxScene struct{ name, pose, action string }
+// hyroxScene is one HYROX exercise with its own pose, action, setting and camera
+// so every shot is a visibly different scene, not the same frame re-posed.
+type hyroxScene struct{ name, pose, action, setting, camera string }
 
 var hyroxScenes = []hyroxScene{
-	{"wall balls", "holding a weighted wall ball at her chest in a quarter-squat, ready to throw it to the target overhead",
-		"She does wall-ball reps: from a deep squat she drives up and throws the ball to the wall target overhead, catches it back at her chest and squats again, talking to camera between reps. The top never rides up and no skin shows at the waist."},
-	{"sled push", "leaning low into a weighted HYROX sled with both arms extended on the posts, ready to drive it forward",
-		"She drives the weighted HYROX sled forward across the turf, pushing hard and low through her legs, then straightens and talks to camera, breathing. The activewear stays in place under the load."},
-	{"battle ropes", "in a low athletic half-squat gripping the ends of two heavy battle ropes, arms ready",
-		"She slams two heavy battle ropes in fast alternating waves from a low athletic stance, then eases off and talks to camera. The top stays put and opaque through the movement."},
-	{"farmers carry", "standing tall holding a heavy kettlebell in each hand at her sides, ready to walk",
-		"She takes controlled steps carrying a heavy kettlebell in each hand (farmers carry), shoulders braced and tall, then sets them down and talks to camera. The leggings stay put and squat-proof."},
-	{"sandbag lunges", "a heavy sandbag hugged across the front of her shoulders, ready to lunge",
-		"She performs walking lunges with a sandbag across her shoulders, dropping into deep lunges, then stands and talks to camera. The fabric stretches but stays opaque and in place."},
-	{"burpees", "standing tall at the top of a burpee, arms coming down after the jump, breathing",
-		"She does a full burpee — squat, hands to the floor, jump back to a plank, jump in and stand with a hop — then talks to camera, breathing. The top stays down, no skin at the waist."},
+	{
+		name:    "wall balls",
+		pose:    "holding a weighted wall ball at her chest in a quarter-squat, ready to throw it to the target overhead",
+		action:  "She does wall-ball reps: from a deep squat she drives up and throws the ball to the wall target overhead, catches it and squats again, talking to camera between reps. The top never rides up.",
+		setting: "At the WALL-BALL station of a HYROX arena: a tall round target mark high on a matte wall in front of her, a stack of wall balls beside her, black turf underfoot, other lanes blurred behind.",
+		camera:  "front on, slightly low angle, framed full length from head to shoes",
+	},
+	{
+		name:    "sled push",
+		pose:    "leaning low into a loaded HYROX sled with both arms extended on the posts, ready to drive it forward",
+		action:  "She drives the loaded HYROX sled forward across the turf, pushing hard and low through her legs, then straightens and talks to camera. The activewear stays put under load.",
+		setting: "On the SLED-PUSH lane: a long black artificial-turf strip with white boundary lines and a loaded HYROX sled right in front of her, the arena stretching out behind.",
+		camera:  "a three-quarter side angle from the front-left, low to the ground, full length",
+	},
+	{
+		name:    "battle ropes",
+		pose:    "in a low athletic half-squat gripping the ends of two heavy battle ropes anchored to a rig",
+		action:  "She slams two heavy battle ropes in fast alternating waves from a low athletic stance, then eases off and talks to camera. The top stays put and opaque.",
+		setting: "At the RIG: two heavy battle ropes anchored to a black steel rig, rubber flooring, a rack of kettlebells behind, spectators blurred far back.",
+		camera:  "straight-on side profile, mid-low angle, full length",
+	},
+	{
+		name:    "farmers carry",
+		pose:    "standing tall holding a heavy kettlebell in each hand at her sides, ready to walk",
+		action:  "She takes controlled steps carrying a heavy kettlebell in each hand (farmers carry), shoulders braced and tall, then sets them down and talks to camera. The leggings stay put.",
+		setting: "On the CARRY lane: an open marked turf lane with a rack of heavy kettlebells at the start line and lane lines running away into the arena.",
+		camera:  "a front three-quarter angle as she walks toward the camera, full length",
+	},
+	{
+		name:    "sandbag lunges",
+		pose:    "a heavy sandbag hugged across the front of her shoulders, ready to lunge",
+		action:  "She performs walking lunges with a sandbag across her shoulders, dropping into deep lunges, then stands and talks to camera. The fabric stretches but stays opaque and in place.",
+		setting: "On the LUNGE lane: a turf strip with a row of sandbags on a low rack beside her and the HYROX rig in the background.",
+		camera:  "side profile at eye level, full length",
+	},
+	{
+		name:    "burpees",
+		pose:    "standing tall at the top of a burpee, arms coming down after the jump, breathing",
+		action:  "She does a full burpee — squat, hands to the floor, jump back to a plank, jump in and stand with a hop — then talks to camera, breathing. The top stays down.",
+		setting: "On a clear turf square in the middle of the HYROX arena, other stations and blurred athletes visible far behind.",
+		camera:  "front on, slightly high angle, full length",
+	},
 }
 
 func hyroxSceneAt(i int) hyroxScene {

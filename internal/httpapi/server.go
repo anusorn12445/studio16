@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -434,8 +435,12 @@ func (s *Server) buildPrompt(w http.ResponseWriter, r *http.Request) {
 	// ?veo=1 returns the compact single-video prompt used for the direct Veo API
 	// call; the default is the full agent pipeline prompt (for copy into an agent).
 	var text string
-	if r.URL.Query().Get("veo") == "1" {
-		text = prompt.BuildVeo(pp, prompt.VeoOpts{})
+	if r.URL.Query().Get("img") == "1" {
+		sc, _ := strconv.Atoi(r.URL.Query().Get("scene"))
+		text = prompt.BuildVeoImage(pp, prompt.VeoOpts{Scene: sc})
+	} else if r.URL.Query().Get("veo") == "1" {
+		sc, _ := strconv.Atoi(r.URL.Query().Get("scene"))
+		text = prompt.BuildVeo(pp, prompt.VeoOpts{Scene: sc})
 	} else {
 		text = prompt.Build(pp)
 	}
