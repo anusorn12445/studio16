@@ -48,6 +48,8 @@ main{padding:22px 28px; min-width:0; overflow:auto}
 .cat:hover{background:var(--panel)} .cat.on{background:var(--panel);border-color:var(--signal)} .cat.soon{opacity:.45;cursor:default}
 .cat .ci{width:24px;height:24px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex:none;background:var(--panel);font-size:13px}
 .soontag{margin-left:auto;font-size:9.5px;color:var(--muted)}
+.pdel{margin-left:auto;background:none;border:none;color:var(--muted);font-size:16px;line-height:1;cursor:pointer;padding:0 4px;flex:none}
+.pdel:hover{color:#FF8A8A}
 @keyframes slidein{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
 .slidein{animation:slidein .22s ease}
 .h{font-size:19px;font-weight:600} .sub{font-size:12.5px;color:var(--muted);margin-bottom:16px}
@@ -231,12 +233,22 @@ function refreshPlist(){
   const pl=document.getElementById('plist'); if(!pl) return;
   pl.innerHTML='';
   products.forEach(p=>{
-    const b=document.createElement('button');
-    b.className='pitem'+(p.id===cur?' on':'');
-    b.innerHTML='<span class="sw" style="background:#EDE6D6"></span><span class="nm">'+esc(p.name||'สินค้า')+'</span>';
-    b.onclick=()=>{ cur=p.id; tab='info'; renderMain(); document.querySelectorAll('#plist .pitem').forEach(el=>el.classList.remove('on')); b.classList.add('on'); };
-    pl.appendChild(b);
+    const thumb=(p.images&&p.images.length)
+      ? '<img class="sw" src="'+assetURL(p.images[0].path)+'" alt="" style="object-fit:cover;background:var(--line)">'
+      : '<span class="sw" style="background:#EDE6D6"></span>';
+    const el=document.createElement('div');
+    el.className='pitem'+(p.id===cur?' on':'');
+    el.innerHTML=thumb+'<span class="nm">'+esc(p.name||'สินค้า')+'</span>'+
+      '<button class="pdel" title="ลบสินค้า" aria-label="ลบ">×</button>';
+    el.onclick=(e)=>{ if(e.target.classList.contains('pdel')) return; cur=p.id; tab='info'; renderMain(); document.querySelectorAll('#plist .pitem').forEach(x=>x.classList.remove('on')); el.classList.add('on'); };
+    el.querySelector('.pdel').onclick=(e)=>{ e.stopPropagation(); delProductFromList(p.id); };
+    pl.appendChild(el);
   });
+}
+async function delProductFromList(id){
+  if(!confirm('ลบสินค้านี้และรูปทั้งหมด?')) return;
+  try{ await jdel('/api/products/'+id); if(cur===id) cur=null; await reloadProducts(); renderNav(); renderMain(); toast('ลบสินค้าแล้ว'); }
+  catch(e){ toast(e.message,1); }
 }
 function renderPlist(){ refreshPlist(); }
 async function newProduct(){
