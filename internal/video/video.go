@@ -4,6 +4,7 @@ package video
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"studio16/internal/ai"
@@ -180,14 +181,26 @@ func (m *Manager) makeImage(productID, jobID string, req Request) (*ai.Image, bo
 	frame := req.FirstFrame
 	gate := req.Checker != nil && len(req.Refs) > 0
 	matched := !gate
+	var prevImg *ai.Image // last attempt — refine it instead of starting over
+	var fixNotes []string // the reported problems to fix on the next attempt
 	for attempt := 1; attempt <= 3; attempt++ {
 		m.setJob(productID, jobID, func(j *model.Job) { j.Status = "image"; j.Attempt = attempt })
 
-		genRefs := req.Refs
+		genRefs := append([]ai.Image{}, req.Refs...)
 		if req.CharRef != nil { // lock the same face as an earlier shot
-			genRefs = append(append([]ai.Image{}, req.Refs...), *req.CharRef)
+			genRefs = append(genRefs, *req.CharRef)
 		}
-		img, err := m.gen.GenerateImage(ctx, req.ImagePrompt, genRefs)
+		imgPrompt := req.ImagePrompt
+		if attempt > 1 && prevImg != nil && len(fixNotes) > 0 {
+			// Refine, don't restart: carry the previous attempt forward and fix
+			// only what was wrong, keeping the parts that already matched.
+			genRefs = append(genRefs, *prevImg)
+			imgPrompt = req.ImagePrompt +
+				"\n\nREFINE — DO NOT START OVER: the LAST attached image is your previous attempt. Keep everything that is already correct in it exactly the same, and change ONLY what is needed to fix these problems so the garment matches the product reference photo: " +
+				strings.Join(fixNotes, "; ") + ". Do not alter anything that already matches."
+		}
+
+		img, err := m.gen.GenerateImage(ctx, imgPrompt, genRefs)
 		if err != nil {
 			if attempt >= 3 {
 				if frame == nil {
@@ -219,13 +232,19 @@ func (m *Manager) makeImage(productID, jobID string, req Request) (*ai.Image, bo
 			matched = true
 			break
 		}
-		// else: not matching — loop and regenerate the image
+		// Not there yet — keep this attempt and the fix list to refine next round.
+		prevImg = &img
+		fixNotes = mr.Mismatches
+		if len(fixNotes) == 0 && strings.TrimSpace(mr.Verdict) != "" {
+			fixNotes = []string{mr.Verdict}
+		}
 	}
 	if !matched {
-		m.setJob(productID, jobID, func(j *model.Job) {
-			j.Status = "mismatch"
-			j.Error = "สินค้าไม่ตรงหลังลองสร้างภาพ 3 ครั้ง — กดเจนใหม่"
-		})
+		msg := "สินค้าไม่ตรงหลังลองแก้ 3 ครั้ง — กดเจนใหม่"
+		if len(fixNotes) > 0 {
+			msg += " (ยังไม่ตรง: " + strings.Join(fixNotes, ", ") + ")"
+		}
+		m.setJob(productID, jobID, func(j *model.Job) { j.Status = "mismatch"; j.Error = msg })
 		return nil, false
 	}
 	return frame, true
