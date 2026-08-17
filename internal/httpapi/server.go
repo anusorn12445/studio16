@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"studio16/internal/ai"
@@ -23,39 +24,56 @@ import (
 )
 
 type Server struct {
-	cfg    config.Config
-	store  *store.Store
-	openai *openai.Client
-	gemini *gemini.Client
-	vid    *video.Manager
+	cfg      config.Config
+	store    *store.Store
+	mu       sync.RWMutex // guards settings + the provider clients below
+	settings Settings
+	openai   *openai.Client
+	gemini   *gemini.Client
+	vid      *video.Manager
 }
 
 func New(cfg config.Config, st *store.Store) *Server {
-	oa := openai.New(cfg.OpenAIKey, cfg.OpenAIModel)
-	gm := gemini.New(cfg.GeminiKey, cfg.GeminiVisionModel, cfg.VeoModel)
-	return &Server{
-		cfg:    cfg,
-		store:  st,
-		openai: oa,
-		gemini: gm,
-		vid:    video.NewManager(gm, st),
-	}
+	s := &Server{cfg: cfg, store: st}
+	s.settings = s.loadSettings()
+	s.rebuild()
+	return s
 }
 
 // analyzer picks the vision provider by name, defaulting to OpenAI.
 func (s *Server) analyzer(name string) ai.Analyzer {
-	switch strings.ToLower(name) {
-	case "gemini":
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if strings.ToLower(name) == "gemini" {
 		return s.gemini
-	default:
-		return s.openai
 	}
+	return s.openai
+}
+
+func (s *Server) curVid() *video.Manager {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.vid
+}
+
+func (s *Server) geminiConfigured() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.settings.GeminiKey != ""
+}
+
+func (s *Server) matchCfg() (provider string, threshold int) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.settings.MatchProvider, s.settings.MatchThreshold
 }
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /api/health", s.health)
+	mux.HandleFunc("GET /api/settings", s.getSettings)
+	mux.HandleFunc("POST /api/settings", s.updateSettings)
 	mux.HandleFunc("GET /api/base-presets", s.listBasePresets)
 	mux.HandleFunc("GET /api/products", s.listProducts)
 	mux.HandleFunc("POST /api/products", s.createProduct)
@@ -129,13 +147,16 @@ func (s *Server) loadImages(p *model.Product, cap int) ([]ai.Image, error) {
 // ================= handlers =================
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
-		"ok":             true,
-		"openaiConfigured": s.cfg.OpenAIKey != "",
-		"geminiConfigured": s.cfg.GeminiKey != "",
-		"veoModel":       s.cfg.VeoModel,
-		"matchThreshold": s.cfg.MatchThreshold,
-	})
+	s.mu.RLock()
+	resp := map[string]any{
+		"ok":               true,
+		"openaiConfigured": s.settings.OpenAIKey != "",
+		"geminiConfigured": s.settings.GeminiKey != "",
+		"veoModel":         s.settings.VeoModel,
+		"matchThreshold":   s.settings.MatchThreshold,
+	}
+	s.mu.RUnlock()
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (s *Server) listProducts(w http.ResponseWriter, r *http.Request) {
@@ -372,8 +393,8 @@ func (s *Server) generate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "not found")
 		return
 	}
-	if s.cfg.GeminiKey == "" {
-		writeErr(w, http.StatusBadRequest, "GEMINI_API_KEY ยังไม่ได้ตั้งค่า (จำเป็นสำหรับ Veo)")
+	if !s.geminiConfigured() {
+		writeErr(w, http.StatusBadRequest, "ยังไม่ได้ตั้งค่า Gemini API key (จำเป็นสำหรับ Veo) — ตั้งได้ที่ปุ่ม ⚙️")
 		return
 	}
 	var req generateReq
@@ -394,7 +415,7 @@ func (s *Server) generate(w http.ResponseWriter, r *http.Request) {
 		firstFrame = &imgs[0]
 	}
 
-	job, err := s.vid.Start(id, pp.Format, pp.AudioMode, promptText, firstFrame)
+	job, err := s.curVid().Start(id, pp.Format, pp.AudioMode, promptText, firstFrame)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -421,7 +442,8 @@ func (s *Server) runReport(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "not found")
 		return
 	}
-	scorer := match.NewScorer(s.analyzer(s.cfg.MatchProvider), s.store, s.cfg.MatchThreshold, s.cfg.FFmpegPath)
+	provider, threshold := s.matchCfg()
+	scorer := match.NewScorer(s.analyzer(provider), s.store, threshold, s.cfg.FFmpegPath)
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 	defer cancel()
 	report, err := scorer.Run(ctx, id)

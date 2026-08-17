@@ -96,10 +96,10 @@ video{width:100%;border-radius:9px;border:1px solid var(--line);background:#000}
 <div id="toast"></div>
 <div class="modal" id="setmodal">
   <div class="sheet">
-    <div class="row" style="margin-bottom:12px"><span style="font-size:15px;font-weight:600">⚙️ สถานะระบบ</span>
+    <div class="row" style="margin-bottom:12px"><span style="font-size:15px;font-weight:600">⚙️ ตั้งค่า API</span>
       <button class="btn" style="margin-left:auto;padding:4px 10px" onclick="closeSet()">✕</button></div>
     <div id="setbody"></div>
-    <div class="muted" style="font-size:11.5px;margin-top:12px;line-height:1.6">🔒 API key ตั้งค่าฝั่ง server ในไฟล์ <span style="font-family:var(--mono)">.env</span> (OPENAI_API_KEY, GEMINI_API_KEY) แล้วรีสตาร์ท backend</div>
+    <div class="muted" style="font-size:11.5px;margin-top:12px;line-height:1.6">🔒 คีย์เก็บฝั่ง server ที่ <span style="font-family:var(--mono)">data/settings.json</span> — กรอกที่นี่แล้วมีผลทันที ไม่ต้องรีสตาร์ท · เว้นช่องคีย์ว่าง = คงคีย์เดิม</div>
   </div>
 </div>
 
@@ -364,15 +364,37 @@ document.getElementById('newp').onclick=async()=>{
   try{ const p=await jpost('/api/products',{}); cur=p.id; tab='info'; await reloadProducts(); renderPlist(); clipView(); toast('สร้างสินค้าใหม่'); }catch(e){ toast(e.message,1); }
 };
 const setmodal=document.getElementById('setmodal');
-document.getElementById('setbtn').onclick=()=>{
+document.getElementById('setbtn').onclick=async()=>{
   const b=document.getElementById('setbody');
-  if(health){ b.innerHTML='<div class="kv"><span>OpenAI key</span><b style="color:'+(health.openaiConfigured?'var(--ok)':'var(--bad)')+'">'+(health.openaiConfigured?'ตั้งค่าแล้ว':'ยังไม่ตั้ง')+'</b></div>'+
-      '<div class="kv"><span>Gemini key (Veo)</span><b style="color:'+(health.geminiConfigured?'var(--ok)':'var(--bad)')+'">'+(health.geminiConfigured?'ตั้งค่าแล้ว':'ยังไม่ตั้ง')+'</b></div>'+
-      '<div class="kv"><span>Veo model</span><b>'+esc(health.veoModel)+'</b></div>'+
-      '<div class="kv"><span>เกณฑ์ผ่าน (match)</span><b>'+esc(health.matchThreshold)+'</b></div>'; }
-  else b.innerHTML='<div class="muted">เชื่อม backend ไม่ได้</div>';
+  b.innerHTML='<div class="muted">กำลังโหลด…</div>';
   setmodal.style.display='flex';
+  let st;
+  try{ st=await api('/api/settings'); }catch(e){ b.innerHTML='<div class="muted">เชื่อม backend ไม่ได้</div>'; return; }
+  const okPh=st.openaiKeySet?'•••• ตั้งค่าแล้ว (เว้นว่าง = ไม่เปลี่ยน)':'sk-...';
+  const gPh=st.geminiKeySet?'•••• ตั้งค่าแล้ว (เว้นว่าง = ไม่เปลี่ยน)':'AIza...';
+  const prov=v=>'<option value="'+v+'"'+(st.matchProvider===v?' selected':'')+'>'+v+'</option>';
+  b.innerHTML=
+    '<div class="lbl">OpenAI API key <span style="color:'+(st.openaiKeySet?'var(--ok)':'var(--muted)')+'">'+(st.openaiKeySet?'✓ ตั้งแล้ว':'ยังไม่ตั้ง')+'</span></div>'+
+    '<input class="inp" type="password" id="s_okey" autocomplete="off" placeholder="'+okPh+'">'+
+    '<div class="lbl" style="margin-top:10px">OpenAI model</div><input class="inp" id="s_omodel" value="'+esc(st.openaiModel)+'">'+
+    '<div class="lbl" style="margin-top:14px">Gemini API key <span style="color:'+(st.geminiKeySet?'var(--ok)':'var(--muted)')+'">'+(st.geminiKeySet?'✓ ตั้งแล้ว':'ยังไม่ตั้ง')+'</span></div>'+
+    '<input class="inp" type="password" id="s_gkey" autocomplete="off" placeholder="'+gPh+'">'+
+    '<div class="grid2" style="margin-top:10px">'+
+      '<div><div class="lbl">Gemini vision model</div><input class="inp" id="s_gvision" value="'+esc(st.geminiVisionModel)+'"></div>'+
+      '<div><div class="lbl">Veo model</div><input class="inp" id="s_veo" value="'+esc(st.veoModel)+'"></div>'+
+    '</div>'+
+    '<div class="grid2" style="margin-top:12px">'+
+      '<div><div class="lbl">ผู้ให้คะแนน match</div><select class="inp" id="s_prov">'+prov('openai')+prov('gemini')+'</select></div>'+
+      '<div><div class="lbl">เกณฑ์ผ่าน (0–100)</div><input class="inp" type="number" id="s_thr" min="0" max="100" value="'+esc(st.matchThreshold)+'"></div>'+
+    '</div>'+
+    '<div class="row" style="margin-top:16px"><button class="btn y" onclick="saveSettings()">บันทึก</button><button class="btn" onclick="closeSet()">ปิด</button></div>';
 };
+async function saveSettings(){
+  const g=id=>document.getElementById(id).value;
+  const body={openaiKey:g('s_okey'),openaiModel:g('s_omodel'),geminiKey:g('s_gkey'),geminiVisionModel:g('s_gvision'),veoModel:g('s_veo'),matchProvider:g('s_prov'),matchThreshold:parseInt(g('s_thr'),10)||75};
+  try{ await jpost('/api/settings',body); toast('บันทึกการตั้งค่าแล้ว'); health=await api('/api/health'); renderHealth(); closeSet(); }
+  catch(e){ toast(e.message,1); }
+}
 function closeSet(){ setmodal.style.display='none'; }
 setmodal.onclick=e=>{ if(e.target===setmodal) closeSet(); };
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeSet(); });
