@@ -95,7 +95,8 @@ func (s *Server) Handler() http.Handler {
 
 	// Serve the static web UI at the root (index.html and friends). More specific
 	// /api/ and /assets/ patterns above take precedence in Go 1.22 routing.
-	mux.Handle("GET /", http.FileServer(http.Dir(s.cfg.WebDir)))
+	// no-cache so the browser always picks up UI updates (no stale index.html).
+	mux.Handle("GET /", noCache(http.FileServer(http.Dir(s.cfg.WebDir))))
 
 	return withCORS(mux)
 }
@@ -110,6 +111,13 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 
 func writeErr(w http.ResponseWriter, code int, msg string) {
 	writeJSON(w, code, map[string]string{"error": msg})
+}
+
+func noCache(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func withCORS(next http.Handler) http.Handler {
