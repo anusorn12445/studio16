@@ -390,8 +390,10 @@ func (s *Server) buildPrompt(w http.ResponseWriter, r *http.Request) {
 }
 
 type generateReq struct {
-	Format string `json:"format"`
-	Audio  string `json:"audio"`
+	Format          string `json:"format"`
+	Audio           string `json:"audio"`
+	DurationSeconds int    `json:"durationSeconds"` // seconds per shot (Veo clamps to 4..8)
+	Shots           int    `json:"shots"`           // how many clips to generate this batch
 }
 
 func (s *Server) generate(w http.ResponseWriter, r *http.Request) {
@@ -423,12 +425,36 @@ func (s *Server) generate(w http.ResponseWriter, r *http.Request) {
 		firstFrame = &imgs[0]
 	}
 
-	job, err := s.curVid().Start(id, pp.Format, pp.AudioMode, promptText, firstFrame)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
-		return
+	// Clamp options: seconds per shot 4..8 (default 8), shots 1..4 (default 1).
+	dur := req.DurationSeconds
+	if dur <= 0 {
+		dur = 8
 	}
-	writeJSON(w, http.StatusAccepted, job)
+	if dur < 4 {
+		dur = 4
+	}
+	if dur > 8 {
+		dur = 8
+	}
+	shots := req.Shots
+	if shots < 1 {
+		shots = 1
+	}
+	if shots > 4 {
+		shots = 4
+	}
+
+	vid := s.curVid()
+	jobs := make([]*model.Job, 0, shots)
+	for i := 0; i < shots; i++ {
+		job, err := vid.Start(id, pp.Format, pp.AudioMode, promptText, firstFrame, dur)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		jobs = append(jobs, job)
+	}
+	writeJSON(w, http.StatusAccepted, jobs)
 }
 
 func (s *Server) getReport(w http.ResponseWriter, r *http.Request) {

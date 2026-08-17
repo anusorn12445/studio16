@@ -174,9 +174,19 @@ type opResp struct {
 	Response json.RawMessage `json:"response"`
 }
 
-func (c *Client) StartVideo(ctx context.Context, promptText string, firstFrame *ai.Image) (string, error) {
+func (c *Client) StartVideo(ctx context.Context, promptText string, firstFrame *ai.Image, durationSeconds int) (string, error) {
 	if c.key == "" {
 		return "", fmt.Errorf("gemini: GEMINI_API_KEY not set")
+	}
+	// Veo accepts a limited duration range; clamp and default to 8s.
+	if durationSeconds <= 0 {
+		durationSeconds = 8
+	}
+	if durationSeconds < 4 {
+		durationSeconds = 4
+	}
+	if durationSeconds > 8 {
+		durationSeconds = 8
 	}
 	inst := veoInstance{Prompt: promptText}
 	if firstFrame != nil {
@@ -194,7 +204,7 @@ func (c *Client) StartVideo(ctx context.Context, promptText string, firstFrame *
 		Parameters: map[string]any{
 			"aspectRatio":     "9:16",
 			"sampleCount":     1,
-			"durationSeconds": 8,
+			"durationSeconds": durationSeconds,
 		},
 	})
 

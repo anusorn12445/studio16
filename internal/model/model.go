@@ -116,10 +116,11 @@ type Product struct {
 
 // Job tracks one Veo video generation request.
 type Job struct {
-	ID        string `json:"id"`
-	Format    string `json:"format"`
-	AudioMode string `json:"audioMode"`
-	Prompt    string `json:"prompt"`
+	ID              string `json:"id"`
+	Format          string `json:"format"`
+	AudioMode       string `json:"audioMode"`
+	DurationSeconds int    `json:"durationSeconds"`
+	Prompt          string `json:"prompt"`
 	Provider  string `json:"provider"` // "gemini-veo"
 	OpName    string `json:"opName"`   // provider operation id for polling
 	Status    string `json:"status"`   // queued | running | done | error

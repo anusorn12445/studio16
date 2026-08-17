@@ -31,17 +31,18 @@ func NewManager(gen Generator, st *store.Store) *Manager {
 
 // Start creates a job on the product, kicks off generation and returns the job
 // immediately. The job is polled to completion in a background goroutine.
-func (m *Manager) Start(productID, format, audioMode, promptText string, firstFrame *ai.Image) (*model.Job, error) {
+func (m *Manager) Start(productID, format, audioMode, promptText string, firstFrame *ai.Image, durationSeconds int) (*model.Job, error) {
 	now := time.Now().Unix()
 	job := &model.Job{
-		ID:        store.NewID("job"),
-		Format:    format,
-		AudioMode: audioMode,
-		Prompt:    promptText,
-		Provider:  m.gen.Name(),
-		Status:    "queued",
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:              store.NewID("job"),
+		Format:          format,
+		AudioMode:       audioMode,
+		DurationSeconds: durationSeconds,
+		Prompt:          promptText,
+		Provider:        m.gen.Name(),
+		Status:          "queued",
+		CreatedAt:       now,
+		UpdatedAt:       now,
 	}
 	if _, err := m.store.Update(productID, func(p *model.Product) error {
 		p.Jobs = append([]model.Job{*job}, p.Jobs...)
@@ -50,7 +51,7 @@ func (m *Manager) Start(productID, format, audioMode, promptText string, firstFr
 		return nil, err
 	}
 
-	go m.run(productID, job.ID, promptText, firstFrame)
+	go m.run(productID, job.ID, promptText, firstFrame, durationSeconds)
 	return job, nil
 }
 
@@ -66,11 +67,11 @@ func (m *Manager) setJob(productID, jobID string, mutate func(*model.Job)) {
 	})
 }
 
-func (m *Manager) run(productID, jobID, promptText string, firstFrame *ai.Image) {
+func (m *Manager) run(productID, jobID, promptText string, firstFrame *ai.Image, durationSeconds int) {
 	ctx, cancel := context.WithTimeout(context.Background(), m.timeout)
 	defer cancel()
 
-	opName, err := m.gen.StartVideo(ctx, promptText, firstFrame)
+	opName, err := m.gen.StartVideo(ctx, promptText, firstFrame, durationSeconds)
 	if err != nil {
 		m.setJob(productID, jobID, func(j *model.Job) { j.Status = "error"; j.Error = err.Error() })
 		return

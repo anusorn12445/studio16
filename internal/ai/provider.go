@@ -40,6 +40,6 @@ type VideoStatus struct {
 // VideoGenerator generates video from a text prompt and an optional first frame.
 type VideoGenerator interface {
 	Name() string
-	StartVideo(ctx context.Context, prompt string, firstFrame *Image) (opName string, err error)
+	StartVideo(ctx context.Context, prompt string, firstFrame *Image, durationSeconds int) (opName string, err error)
 	PollVideo(ctx context.Context, opName string) (VideoStatus, error)
 }
