@@ -80,11 +80,13 @@ func MatchPrompt(numRefs int, specText string) string {
 		b.WriteString("\n---\n\n")
 	}
 	b.WriteString("Compare neckline shape and depth, strap width and spacing, hem position, fabric texture, colour, and any print or trim. A different neckline, thicker straps, a missing pattern, the wrong colour, or a bra/crop-top substitution are all serious mismatches.\n\n")
+	b.WriteString("SEPARATELY, look for AI-generation defects in the candidate and list them under \"issues\": distorted hands or extra/missing fingers, an unnatural, twisted or garbled mouth (a bad lip-sync / speech look), a warped or melted face, garbled or gibberish text, or extra limbs. These are quality problems, not product mismatches.\n\n")
 	b.WriteString("Reply with ONLY this JSON object, no prose, no markdown fences:\n")
 	b.WriteString(`{
  "score": 0-100 integer — 100 means indistinguishable from the real product, 0 means a completely different garment,
  "verdict": "one short Thai sentence summarising whether the candidate matches the product",
- "mismatches": ["short English phrase per concrete difference, empty array if none"]
+ "mismatches": ["short Thai phrase per concrete product difference, empty array if none"],
+ "issues": ["short Thai phrase per visual defect — hands/fingers, mouth/face, artifacts — empty array if none"]
 }`)
 	return b.String()
 }

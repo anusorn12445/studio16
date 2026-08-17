@@ -15,6 +15,7 @@ type MatchResult struct {
 	Score      int      `json:"score"` // 0-100, how well the asset matches the real product
 	Verdict    string   `json:"verdict"`
 	Mismatches []string `json:"mismatches"`
+	Issues     []string `json:"issues"` // AI defects: hands/fingers, mouth/face, artifacts
 }
 
 // Analyzer reads product photos and returns garment spec JSON, and scores matches.

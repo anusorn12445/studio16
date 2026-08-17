@@ -99,6 +99,12 @@ video{width:100%;border-radius:9px;border:1px solid var(--line);background:#000}
 </div>
 
 <div id="toast"></div>
+<div class="modal" id="vmodal" style="align-items:center">
+  <div style="position:relative;max-width:96vw">
+    <button class="btn" style="position:absolute;top:-42px;right:0" onclick="closeVideo()">✕ ปิด</button>
+    <video id="vplayer" controls autoplay playsinline style="max-width:96vw;max-height:86vh;border-radius:10px;border:1px solid var(--line);background:#000;display:block"></video>
+  </div>
+</div>
 <div class="modal" id="setmodal">
   <div class="sheet">
     <div class="row" style="margin-bottom:12px"><span style="font-size:15px;font-weight:600">⚙️ ตั้งค่า API</span>
@@ -129,7 +135,7 @@ const CATTREE={ name:'หมวด', children:{
   lifestyle:{ name:'ไลฟ์สไตล์', ic:'✨', soon:true },
   unbox:{ name:'แกะกล่อง', ic:'📦', soon:true },
 }};
-let nav='clip', products=[], cur=null, tab='info', presets=[], health=null, pollTimer=null, clipOpen=true, catPath=[];
+let nav='clip', products=[], cur=null, tab='info', presets=[], health=null, pollTimer=null, clipOpen=true, catPath=[], autoReportPending=false;
 
 async function api(path,opts){
   const r=await fetch(path,opts||{});
@@ -145,6 +151,9 @@ const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;',
 function toast(m,err){const t=document.getElementById('toast');t.textContent=m;t.className='on'+(err?' err':'');clearTimeout(t._x);t._x=setTimeout(()=>t.className='',err?3600:2000);}
 function getCur(){return products.find(p=>p.id===cur)||null;}
 function assetURL(rel){return rel?('/'+rel):'';}
+function videoThumb(url,w){ w=w||'150px'; return '<video src="'+url+'#t=0.1" muted preload="metadata" playsinline title="กดเพื่อดูเต็มจอ" style="width:'+w+';aspect-ratio:9/16;object-fit:cover;border-radius:9px;border:1px solid var(--line);cursor:pointer;display:block;background:#000" onclick="openVideo(\''+url+'\')"></video>'; }
+function openVideo(url){ const v=document.getElementById('vplayer'); v.src=url; document.getElementById('vmodal').style.display='flex'; try{v.play();}catch(e){} }
+function closeVideo(){ const v=document.getElementById('vplayer'); try{v.pause();}catch(e){} v.removeAttribute('src'); if(v.load) v.load(); document.getElementById('vmodal').style.display='none'; }
 
 async function boot(){
   try{ health=await api('/api/health'); }catch(e){ health=null; }
@@ -343,7 +352,7 @@ async function genVideo(){
   const f=document.getElementById('p_fmt').value, a=document.getElementById('p_audio').value;
   const shots=parseInt(document.getElementById('p_shots').value,10)||1;
   const durationSeconds=parseInt(document.getElementById('p_dur').value,10)||8;
-  try{ await jpost('/api/products/'+cur+'/generate',{format:f,audio:a,shots,durationSeconds}); toast('ส่งงานเจนวิดีโอ '+shots+' ช็อต ('+durationSeconds+' วิ/ช็อต)'); await reloadProducts(); tab='video'; clipView(); }
+  try{ await jpost('/api/products/'+cur+'/generate',{format:f,audio:a,shots,durationSeconds}); autoReportPending=true; toast('ส่งงานเจนวิดีโอ '+shots+' ช็อต ('+durationSeconds+' วิ/ช็อต)'); await reloadProducts(); tab='video'; clipView(); }
   catch(e){ toast(e.message,1); }
 }
 
@@ -360,14 +369,22 @@ function jobCard(j){
   const ic=s==='done'?'✓':s==='error'?'✕':'◴';
   const label={queued:'เข้าคิว',image:'ขั้น 1/2 · กำลังสร้างภาพ…',running:'ขั้น 2/2 · เรนเดอร์วิดีโอ…',done:'เสร็จ',error:'ผิดพลาด'}[s]||s;
   const frame=j.imagePath?'<img src="'+assetURL(j.imagePath)+'" alt="เฟรมแรก" style="width:96px;border-radius:9px;border:1px solid var(--line);margin-top:8px">':'';
-  const vid=(s==='done'&&j.videoPath)?'<video src="'+assetURL(j.videoPath)+'" controls></video>':'';
+  const vid=(s==='done'&&j.videoPath)?videoThumb(assetURL(j.videoPath)):'';
   const err=j.error?('<div class="risk" style="color:#FFC9C9">'+esc(j.error)+'</div>'):'';
   return '<div style="margin-bottom:12px"><div class="card"><span class="ic" style="background:rgba(255,255,255,.06);color:'+col+'">'+ic+'</span>'+
     '<div style="flex:1"><div style="font-size:13px">'+esc(j.format)+' · '+esc(j.audioMode)+(j.durationSeconds?(' · '+j.durationSeconds+' วิ'):'')+'</div><div class="muted" style="font-size:11.5px">'+esc(j.provider||'')+'</div></div>'+
     '<span style="font-size:12px;color:'+col+'">'+label+'</span></div>'+err+(vid||frame)+'</div>';
 }
 function jobBusy(j){ return j.status==='queued'||j.status==='image'||j.status==='running'; }
-function startPoll(){ stopPoll(); pollTimer=setInterval(async()=>{ try{ const p=await api('/api/products/'+cur); const i=products.findIndex(x=>x.id===cur); if(i>=0) products[i]=p; if(nav==='clip'&&tab==='video') videoPanel(p); if(!(p.jobs||[]).some(jobBusy)) stopPoll(); }catch(e){} },8000); }
+function startPoll(){ stopPoll(); pollTimer=setInterval(async()=>{ try{
+  const p=await api('/api/products/'+cur); const i=products.findIndex(x=>x.id===cur); if(i>=0) products[i]=p;
+  if(nav==='clip'&&tab==='video') videoPanel(p);
+  if(!(p.jobs||[]).some(jobBusy)){
+    stopPoll();
+    const hasDoneClip=(p.jobs||[]).some(j=>j.status==='done'&&j.videoPath);
+    if(autoReportPending && hasDoneClip){ autoReportPending=false; nav='clip'; tab='report'; renderNav(); clipView(); toast('เจนเสร็จ — กำลังตรวจรีพอทให้'); runReport(); }
+  }
+}catch(e){} },8000); }
 function stopPoll(){ if(pollTimer){ clearInterval(pollTimer); pollTimer=null; } }
 
 function reportPanel(p){
@@ -381,13 +398,13 @@ function reportPanel(p){
       '<div class="stat"><div class="muted" style="font-size:12px">เกณฑ์ผ่าน</div><div class="n">'+rep.threshold+'</div></div></div>'+
       (rep.items||[]).map(it=>{ const col=it.pass?'var(--ok)':'var(--bad)';
         return '<div class="card"><span style="font-size:11px;color:var(--muted);width:34px;font-family:var(--mono)">'+esc(it.kind)+'</span>'+
-        '<div style="flex:1;min-width:0"><div style="font-size:13px">'+esc(it.verdict||'')+'</div>'+(it.mismatches&&it.mismatches.length?'<div class="muted" style="font-size:11.5px">'+esc(it.mismatches.join(', '))+'</div>':'')+'</div>'+
+        '<div style="flex:1;min-width:0"><div style="font-size:13px">'+esc(it.verdict||'')+'</div>'+(it.mismatches&&it.mismatches.length?'<div class="muted" style="font-size:11.5px">'+esc(it.mismatches.join(', '))+'</div>':'')+(it.issues&&it.issues.length?'<div style="font-size:11.5px;color:#FFC08A">⚠️ '+esc(it.issues.join(', '))+'</div>':'')+'</div>'+
         '<div style="width:70px"><div class="bar"><i style="width:'+(it.score||0)+'%;background:'+col+'"></i></div></div>'+
         '<span style="font-size:13px;font-weight:700;width:26px;text-align:right">'+(it.score||0)+'</span>'+
         '<span style="font-size:11.5px;font-weight:700;color:'+col+';width:50px;text-align:right">'+(it.pass?'ผ่าน':'ไม่ผ่าน')+'</span></div>';
       }).join('');
   } else { body='<div class="muted">ยังไม่มีรีพอท</div>'; }
-  el.innerHTML='<div class="row" style="margin-bottom:12px"><button class="btn y" id="repBtn" onclick="runReport()">ตรวจสินค้าตรง/ไม่ตรง</button><span class="muted" style="font-size:12px">ให้ AI เทียบรูป+คลิปกับสินค้าจริง</span></div>'+body;
+  el.innerHTML='<div class="row" style="margin-bottom:12px"><button class="btn y" id="repBtn" onclick="runReport()">ตรวจ</button><span class="muted" style="font-size:12px">AI เทียบสินค้าตรง + จับมือ/นิ้ว/ปาก-หน้าเพี้ยน</span></div>'+body;
 }
 async function runReport(){
   const btn=document.getElementById('repBtn'); btn.disabled=true; btn.textContent='กำลังตรวจ…';
@@ -441,7 +458,7 @@ function clipsView(){
       const badge=done?'<span class="badge" style="background:rgba(111,216,168,.16);color:var(--ok)">เสร็จ</span>':
         j.status==='error'?'<span class="badge" style="background:rgba(255,122,122,.16);color:var(--bad)">error</span>':
         '<span class="badge" style="background:rgba(185,166,232,.16);color:var(--lilac)">'+esc(j.status)+'</span>';
-      const media=done&&j.videoPath?'<video src="'+assetURL(j.videoPath)+'" controls></video>':'<div class="pre" style="text-align:center;color:var(--muted)">—</div>';
+      const media=done&&j.videoPath?videoThumb(assetURL(j.videoPath),'100%'):'<div class="thumb">'+(done?'▶':'◴')+'</div>';
       return '<div class="gcard">'+media+'<div style="font-size:13px;margin-top:8px">'+esc(p.name)+'</div><div class="muted" style="font-size:11.5px;margin:2px 0 8px">'+esc(j.format)+' · '+esc(j.audioMode)+(j.durationSeconds?(' · '+j.durationSeconds+' วิ'):'')+'</div>'+badge+'</div>';
     }).join('')+'</div>'):'<div class="muted">ยังไม่มีคลิป</div>');
 }
@@ -483,7 +500,8 @@ async function saveSettings(){
 }
 function closeSet(){ setmodal.style.display='none'; }
 setmodal.onclick=e=>{ if(e.target===setmodal) closeSet(); };
-document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeSet(); });
+document.getElementById('vmodal').onclick=e=>{ if(e.target.id==='vmodal') closeVideo(); };
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeSet(); closeVideo(); } });
 
 boot();
 </script>

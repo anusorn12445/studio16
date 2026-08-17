@@ -149,4 +149,5 @@ type MatchItem struct {
 	Pass       bool     `json:"pass"`
 	Verdict    string   `json:"verdict"`
 	Mismatches []string `json:"mismatches"`
+	Issues     []string `json:"issues"` // AI defects: hands/fingers, mouth/face, artifacts
 }

@@ -137,6 +137,7 @@ func (s *Scorer) Run(ctx context.Context, productID string) (*model.Report, erro
 			item.Score = mr.Score
 			item.Verdict = mr.Verdict
 			item.Mismatches = mr.Mismatches
+			item.Issues = mr.Issues
 			item.Pass = mr.Score >= s.threshold
 		}
 		s.tally(report, item)
@@ -167,6 +168,7 @@ func (s *Scorer) Run(ctx context.Context, productID string) (*model.Report, erro
 			item.Score = mr.Score
 			item.Verdict = mr.Verdict
 			item.Mismatches = mr.Mismatches
+			item.Issues = mr.Issues
 			item.Pass = mr.Score >= s.threshold
 		}
 		s.tally(report, item)
