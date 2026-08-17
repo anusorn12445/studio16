@@ -145,11 +145,11 @@ func BuildVeoImage(p model.Product, o VeoOpts) string {
 	pose := F.Pose1
 	if p.Format == "hyrox" {
 		s := hyroxSceneAt(o.Scene)
-		pose = "POSE — " + s.name + ": she is " + s.pose + ", wearing the activewear, mid-workout, athletic and focused, showing how the outfit sits and holds under real effort."
+		pose = "THIS SHOT'S HYROX EXERCISE IS " + strings.ToUpper(s.name) + " — it must be clearly different from other shots. POSE — she is " + s.pose + ", wearing the activewear, mid-workout, athletic and focused, showing how the outfit sits and holds under real effort."
 	}
 	fmt.Fprintf(&b, "SETTING: %s\n\n", trimRunes(F.Setting, 240))
 	fmt.Fprintf(&b, "%s\n\n", trimRunes(pose, 300))
-	b.WriteString(authLine + " Keep the SAME woman across every shot: if one of the attached images is a character reference showing a person, copy her exact face, hair and skin tone and do not invent a new person. Full-bleed 9:16 portrait, no black bars or borders, no text, no logos, no watermark.")
+	b.WriteString(authLine + " CHARACTER LOCK: if one of the attached images shows a person, copy ONLY her face, hair and skin tone so it stays the same woman — but she MUST be in the new pose and doing the exercise described above, in a fresh composition. Do NOT copy the pose, the exercise, the crop, the equipment placement or the background from that person reference; only her identity carries over. Full-bleed 9:16 portrait, no black bars or borders, no text, no logos, no watermark.")
 
 	return trimRunes(b.String(), 1700)
 }
