@@ -498,7 +498,8 @@ func (s *Server) generate(w http.ResponseWriter, r *http.Request) {
 		shots = 4
 	}
 
-	provider, threshold := s.matchCfg()
+	// Pre-video match gate is OFF: generate the image then go straight to video.
+	_, threshold := s.matchCfg()
 	spec := match.SpecText(p)
 
 	// Plan the shots as a connected story (hook → body → close). Each shot gets
@@ -517,7 +518,7 @@ func (s *Server) generate(w http.ResponseWriter, r *http.Request) {
 			FirstFrame:      firstFrame,
 			DurationSeconds: dur,
 			Scene:           i,
-			Checker:         s.analyzer(provider),
+			Checker:         nil, // gate off — no pre-video match check
 			Threshold:       threshold,
 			SpecText:        spec,
 		})
