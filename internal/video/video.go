@@ -11,9 +11,11 @@ import (
 	"studio16/internal/store"
 )
 
-// Generator is a VideoGenerator that can also download its produced files.
+// Generator is a VideoGenerator that can also generate the first-frame image
+// and download its produced files.
 type Generator interface {
 	ai.VideoGenerator
+	GenerateImage(ctx context.Context, prompt string, refs []ai.Image) (ai.Image, error)
 	DownloadVideo(ctx context.Context, uri string) ([]byte, error)
 }
 
@@ -31,14 +33,14 @@ func NewManager(gen Generator, st *store.Store) *Manager {
 
 // Start creates a job on the product, kicks off generation and returns the job
 // immediately. The job is polled to completion in a background goroutine.
-func (m *Manager) Start(productID, format, audioMode, promptText string, firstFrame *ai.Image, durationSeconds int) (*model.Job, error) {
+func (m *Manager) Start(productID, format, audioMode, videoPrompt, imagePrompt string, refs []ai.Image, firstFrame *ai.Image, durationSeconds int) (*model.Job, error) {
 	now := time.Now().Unix()
 	job := &model.Job{
 		ID:              store.NewID("job"),
 		Format:          format,
 		AudioMode:       audioMode,
 		DurationSeconds: durationSeconds,
-		Prompt:          promptText,
+		Prompt:          videoPrompt,
 		Provider:        m.gen.Name(),
 		Status:          "queued",
 		CreatedAt:       now,
@@ -51,7 +53,7 @@ func (m *Manager) Start(productID, format, audioMode, promptText string, firstFr
 		return nil, err
 	}
 
-	go m.run(productID, job.ID, promptText, firstFrame, durationSeconds)
+	go m.run(productID, job.ID, videoPrompt, imagePrompt, refs, firstFrame, durationSeconds)
 	return job, nil
 }
 
@@ -67,11 +69,32 @@ func (m *Manager) setJob(productID, jobID string, mutate func(*model.Job)) {
 	})
 }
 
-func (m *Manager) run(productID, jobID, promptText string, firstFrame *ai.Image, durationSeconds int) {
+func (m *Manager) run(productID, jobID, videoPrompt, imagePrompt string, refs []ai.Image, firstFrame *ai.Image, durationSeconds int) {
 	ctx, cancel := context.WithTimeout(context.Background(), m.timeout)
 	defer cancel()
 
-	opName, err := m.gen.StartVideo(ctx, promptText, firstFrame, durationSeconds)
+	// Step 1 — generate the opening-frame image (if requested), then use it as
+	// Veo's first frame. Fall back to any uploaded reference photo on failure.
+	frame := firstFrame
+	if imagePrompt != "" {
+		m.setJob(productID, jobID, func(j *model.Job) { j.Status = "image" })
+		img, err := m.gen.GenerateImage(ctx, imagePrompt, refs)
+		if err != nil {
+			if frame == nil {
+				m.setJob(productID, jobID, func(j *model.Job) { j.Status = "error"; j.Error = "สร้างภาพเฟรมแรกไม่สำเร็จ: " + err.Error() })
+				return
+			}
+			// else: keep going with the uploaded reference photo as the frame
+		} else {
+			frame = &img
+			if path, e := m.store.SaveAsset(productID, jobID+".frame.png", img.Data); e == nil {
+				m.setJob(productID, jobID, func(j *model.Job) { j.ImagePath = path })
+			}
+		}
+	}
+
+	// Step 2 — animate the frame into video with Veo.
+	opName, err := m.gen.StartVideo(ctx, videoPrompt, frame, durationSeconds)
 	if err != nil {
 		m.setJob(productID, jobID, func(j *model.Job) { j.Status = "error"; j.Error = err.Error() })
 		return

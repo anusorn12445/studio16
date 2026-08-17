@@ -14,9 +14,10 @@ type Config struct {
 	OpenAIKey   string
 	OpenAIModel string // vision/text model, e.g. gpt-4o
 
-	GeminiKey        string
+	GeminiKey         string
 	GeminiVisionModel string // e.g. gemini-2.5-flash
-	VeoModel         string // e.g. veo-3.1-generate-preview
+	GeminiImageModel  string // e.g. gemini-2.5-flash-image (Nano Banana)
+	VeoModel          string // e.g. veo-3.1-generate-preview
 
 	MatchThreshold int    // 0-100 pass/fail cutoff
 	MatchProvider  string // which provider scores the match: openai | gemini
@@ -50,6 +51,7 @@ func Load() Config {
 
 		GeminiKey:         os.Getenv("GEMINI_API_KEY"),
 		GeminiVisionModel: env("GEMINI_VISION_MODEL", "gemini-2.5-flash"),
+		GeminiImageModel:  env("GEMINI_IMAGE_MODEL", "gemini-2.5-flash-image"),
 		VeoModel:          env("VEO_MODEL", "veo-3.1-generate-preview"),
 
 		MatchThreshold: envInt("MATCH_THRESHOLD", 75),

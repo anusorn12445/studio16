@@ -25,20 +25,107 @@ const base = "https://generativelanguage.googleapis.com/v1beta"
 type Client struct {
 	key         string
 	visionModel string
+	imageModel  string
 	veoModel    string
 	http        *http.Client
 }
 
-func New(key, visionModel, veoModel string) *Client {
+func New(key, visionModel, imageModel, veoModel string) *Client {
 	return &Client{
 		key:         key,
 		visionModel: visionModel,
+		imageModel:  imageModel,
 		veoModel:    veoModel,
-		http:        &http.Client{Timeout: 120 * time.Second},
+		http:        &http.Client{Timeout: 180 * time.Second},
 	}
 }
 
 func (c *Client) Name() string { return "gemini:" + c.visionModel }
+
+// ================= image generation (Nano Banana / Gemini image) =================
+
+type imgGenReq struct {
+	Contents         []content `json:"contents"`
+	GenerationConfig struct {
+		ResponseModalities []string `json:"responseModalities"`
+	} `json:"generationConfig"`
+}
+
+type imgGenResp struct {
+	Candidates []struct {
+		Content struct {
+			Parts []struct {
+				Text       string `json:"text"`
+				InlineData *struct {
+					MimeType string `json:"mimeType"`
+					Data     string `json:"data"`
+				} `json:"inlineData"`
+			} `json:"parts"`
+		} `json:"content"`
+	} `json:"candidates"`
+	Error *struct {
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
+// GenerateImage creates a styled image from a text prompt plus optional
+// reference photos (the garment), using the configured image model
+// ("Nano Banana" — Gemini image generation). The result is the opening frame
+// that Veo then animates.
+func (c *Client) GenerateImage(ctx context.Context, promptText string, refs []ai.Image) (ai.Image, error) {
+	if c.key == "" {
+		return ai.Image{}, fmt.Errorf("gemini: GEMINI_API_KEY not set")
+	}
+	parts := make([]part, 0, len(refs)+1)
+	for _, im := range refs {
+		mime := im.Mime
+		if mime == "" {
+			mime = "image/jpeg"
+		}
+		parts = append(parts, part{InlineData: &inlineData{MimeType: mime, Data: base64.StdEncoding.EncodeToString(im.Data)}})
+	}
+	parts = append(parts, part{Text: promptText})
+
+	var req imgGenReq
+	req.Contents = []content{{Parts: parts}}
+	req.GenerationConfig.ResponseModalities = []string{"IMAGE"}
+	body, _ := json.Marshal(req)
+
+	url := fmt.Sprintf("%s/models/%s:generateContent?key=%s", base, c.imageModel, c.key)
+	httpReq, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.http.Do(httpReq)
+	if err != nil {
+		return ai.Image{}, err
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	var r imgGenResp
+	_ = json.Unmarshal(raw, &r)
+	if resp.StatusCode != http.StatusOK {
+		if r.Error != nil {
+			return ai.Image{}, fmt.Errorf("image: %s", r.Error.Message)
+		}
+		return ai.Image{}, fmt.Errorf("image: HTTP %d", resp.StatusCode)
+	}
+	for _, cand := range r.Candidates {
+		for _, p := range cand.Content.Parts {
+			if p.InlineData != nil && p.InlineData.Data != "" {
+				data, err := base64.StdEncoding.DecodeString(p.InlineData.Data)
+				if err != nil {
+					return ai.Image{}, fmt.Errorf("image: bad base64: %w", err)
+				}
+				mime := p.InlineData.MimeType
+				if mime == "" {
+					mime = "image/png"
+				}
+				return ai.Image{Mime: mime, Data: data}, nil
+			}
+		}
+	}
+	return ai.Image{}, fmt.Errorf("image: no image returned by %s", c.imageModel)
+}
 
 // ================= vision / text (generateContent) =================
 

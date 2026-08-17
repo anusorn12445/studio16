@@ -352,19 +352,22 @@ function videoPanel(p){
   const jobs=(p.jobs||[]);
   el.innerHTML='<div class="row" style="margin-bottom:12px"><button class="btn o" onclick="tab=\'prompt\';clipView()">▶ เจนวิดีโอใหม่</button></div>'+
     (jobs.length?jobs.map(j=>jobCard(j)).join(''):'<div class="muted">ยังไม่มีงานวิดีโอ</div>');
-  if(jobs.some(j=>j.status==='queued'||j.status==='running')) startPoll();
+  if(jobs.some(jobBusy)) startPoll();
 }
 function jobCard(j){
   const s=j.status;
   const col=s==='done'?'var(--ok)':s==='error'?'var(--bad)':'var(--lilac)';
   const ic=s==='done'?'✓':s==='error'?'✕':'◴';
+  const label={queued:'เข้าคิว',image:'ขั้น 1/2 · กำลังสร้างภาพ…',running:'ขั้น 2/2 · เรนเดอร์วิดีโอ…',done:'เสร็จ',error:'ผิดพลาด'}[s]||s;
+  const frame=j.imagePath?'<img src="'+assetURL(j.imagePath)+'" alt="เฟรมแรก" style="width:96px;border-radius:9px;border:1px solid var(--line);margin-top:8px">':'';
   const vid=(s==='done'&&j.videoPath)?'<video src="'+assetURL(j.videoPath)+'" controls></video>':'';
   const err=j.error?('<div class="risk" style="color:#FFC9C9">'+esc(j.error)+'</div>'):'';
   return '<div style="margin-bottom:12px"><div class="card"><span class="ic" style="background:rgba(255,255,255,.06);color:'+col+'">'+ic+'</span>'+
     '<div style="flex:1"><div style="font-size:13px">'+esc(j.format)+' · '+esc(j.audioMode)+(j.durationSeconds?(' · '+j.durationSeconds+' วิ'):'')+'</div><div class="muted" style="font-size:11.5px">'+esc(j.provider||'')+'</div></div>'+
-    '<span style="font-size:12px;color:'+col+'">'+esc(s)+'</span></div>'+err+vid+'</div>';
+    '<span style="font-size:12px;color:'+col+'">'+label+'</span></div>'+err+(vid||frame)+'</div>';
 }
-function startPoll(){ stopPoll(); pollTimer=setInterval(async()=>{ try{ const p=await api('/api/products/'+cur); const i=products.findIndex(x=>x.id===cur); if(i>=0) products[i]=p; if(nav==='clip'&&tab==='video') videoPanel(p); if(!(p.jobs||[]).some(j=>j.status==='queued'||j.status==='running')) stopPoll(); }catch(e){} },8000); }
+function jobBusy(j){ return j.status==='queued'||j.status==='image'||j.status==='running'; }
+function startPoll(){ stopPoll(); pollTimer=setInterval(async()=>{ try{ const p=await api('/api/products/'+cur); const i=products.findIndex(x=>x.id===cur); if(i>=0) products[i]=p; if(nav==='clip'&&tab==='video') videoPanel(p); if(!(p.jobs||[]).some(jobBusy)) stopPoll(); }catch(e){} },8000); }
 function stopPoll(){ if(pollTimer){ clearInterval(pollTimer); pollTimer=null; } }
 
 function reportPanel(p){
@@ -462,8 +465,10 @@ document.getElementById('setbtn').onclick=async()=>{
     '<input class="inp" type="password" id="s_gkey" autocomplete="off" placeholder="'+gPh+'">'+
     '<div class="grid2" style="margin-top:10px">'+
       '<div><div class="lbl">Gemini vision model</div><input class="inp" id="s_gvision" value="'+esc(st.geminiVisionModel)+'"></div>'+
-      '<div><div class="lbl">Veo model</div><input class="inp" id="s_veo" value="'+esc(st.veoModel)+'"></div>'+
+      '<div><div class="lbl">Veo model (วิดีโอ)</div><input class="inp" id="s_veo" value="'+esc(st.veoModel)+'"></div>'+
     '</div>'+
+    '<div class="lbl" style="margin-top:10px">Gemini image model (Nano Banana · สร้างภาพเฟรมแรก)</div>'+
+    '<input class="inp" id="s_gimage" value="'+esc(st.geminiImageModel)+'">'+
     '<div class="grid2" style="margin-top:12px">'+
       '<div><div class="lbl">ผู้ให้คะแนน match</div><select class="inp" id="s_prov">'+prov('openai')+prov('gemini')+'</select></div>'+
       '<div><div class="lbl">เกณฑ์ผ่าน (0–100)</div><input class="inp" type="number" id="s_thr" min="0" max="100" value="'+esc(st.matchThreshold)+'"></div>'+
@@ -472,7 +477,7 @@ document.getElementById('setbtn').onclick=async()=>{
 };
 async function saveSettings(){
   const g=id=>document.getElementById(id).value;
-  const body={openaiKey:g('s_okey'),openaiModel:g('s_omodel'),geminiKey:g('s_gkey'),geminiVisionModel:g('s_gvision'),veoModel:g('s_veo'),matchProvider:g('s_prov'),matchThreshold:parseInt(g('s_thr'),10)||75};
+  const body={openaiKey:g('s_okey'),openaiModel:g('s_omodel'),geminiKey:g('s_gkey'),geminiVisionModel:g('s_gvision'),geminiImageModel:g('s_gimage'),veoModel:g('s_veo'),matchProvider:g('s_prov'),matchThreshold:parseInt(g('s_thr'),10)||75};
   try{ await jpost('/api/settings',body); toast('บันทึกการตั้งค่าแล้ว'); health=await api('/api/health'); renderHealth(); closeSet(); }
   catch(e){ toast(e.message,1); }
 }

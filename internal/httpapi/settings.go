@@ -21,6 +21,7 @@ type Settings struct {
 	OpenAIModel       string `json:"openaiModel"`
 	GeminiKey         string `json:"geminiKey"`
 	GeminiVisionModel string `json:"geminiVisionModel"`
+	GeminiImageModel  string `json:"geminiImageModel"`
 	VeoModel          string `json:"veoModel"`
 	MatchProvider     string `json:"matchProvider"`
 	MatchThreshold    int    `json:"matchThreshold"`
@@ -38,6 +39,7 @@ func (s *Server) loadSettings() Settings {
 		OpenAIModel:       s.cfg.OpenAIModel,
 		GeminiKey:         s.cfg.GeminiKey,
 		GeminiVisionModel: s.cfg.GeminiVisionModel,
+		GeminiImageModel:  s.cfg.GeminiImageModel,
 		VeoModel:          s.cfg.VeoModel,
 		MatchProvider:     s.cfg.MatchProvider,
 		MatchThreshold:    s.cfg.MatchThreshold,
@@ -56,6 +58,9 @@ func (s *Server) loadSettings() Settings {
 			}
 			if v.GeminiVisionModel != "" {
 				set.GeminiVisionModel = v.GeminiVisionModel
+			}
+			if v.GeminiImageModel != "" {
+				set.GeminiImageModel = v.GeminiImageModel
 			}
 			if v.VeoModel != "" {
 				set.VeoModel = v.VeoModel
@@ -82,7 +87,7 @@ func (s *Server) saveSettings() error {
 // Caller holds s.mu.
 func (s *Server) rebuild() {
 	s.openai = openai.New(s.settings.OpenAIKey, s.settings.OpenAIModel)
-	s.gemini = gemini.New(s.settings.GeminiKey, s.settings.GeminiVisionModel, s.settings.VeoModel)
+	s.gemini = gemini.New(s.settings.GeminiKey, s.settings.GeminiVisionModel, s.settings.GeminiImageModel, s.settings.VeoModel)
 	s.vid = video.NewManager(s.gemini, s.store)
 }
 
@@ -96,6 +101,7 @@ func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
 		"openaiModel":       s.settings.OpenAIModel,
 		"geminiKeySet":      s.settings.GeminiKey != "",
 		"geminiVisionModel": s.settings.GeminiVisionModel,
+		"geminiImageModel":  s.settings.GeminiImageModel,
 		"veoModel":          s.settings.VeoModel,
 		"matchProvider":     s.settings.MatchProvider,
 		"matchThreshold":    s.settings.MatchThreshold,
@@ -109,6 +115,7 @@ type settingsReq struct {
 	OpenAIModel       *string `json:"openaiModel"`
 	GeminiKey         *string `json:"geminiKey"`
 	GeminiVisionModel *string `json:"geminiVisionModel"`
+	GeminiImageModel  *string `json:"geminiImageModel"`
 	VeoModel          *string `json:"veoModel"`
 	MatchProvider     *string `json:"matchProvider"`
 	MatchThreshold    *int    `json:"matchThreshold"`
@@ -132,6 +139,9 @@ func (s *Server) updateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.GeminiVisionModel != nil && *req.GeminiVisionModel != "" {
 		s.settings.GeminiVisionModel = *req.GeminiVisionModel
+	}
+	if req.GeminiImageModel != nil && *req.GeminiImageModel != "" {
+		s.settings.GeminiImageModel = *req.GeminiImageModel
 	}
 	if req.VeoModel != nil && *req.VeoModel != "" {
 		s.settings.VeoModel = *req.VeoModel

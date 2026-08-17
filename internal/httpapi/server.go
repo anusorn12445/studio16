@@ -424,14 +424,15 @@ func (s *Server) generate(w http.ResponseWriter, r *http.Request) {
 	if req.Audio != "" {
 		pp.AudioMode = req.Audio
 	}
-	// Direct Veo API needs a SHORT prompt — use the compact single-video build,
-	// not the full agent pipeline prompt (which Veo rejects as too long).
-	promptText := prompt.BuildVeo(pp)
-
-	// Use the first uploaded photo as the video's first frame, if any.
+	// Two-step, both with SHORT prompts: generate an opening-frame image first
+	// (BuildVeoImage), then animate it with Veo (BuildVeo). Uploaded product
+	// photos are the garment reference and the fallback first frame.
+	videoPrompt := prompt.BuildVeo(pp)
+	imagePrompt := prompt.BuildVeoImage(pp)
+	refs, _ := s.loadImages(p, 3)
 	var firstFrame *ai.Image
-	if imgs, err := s.loadImages(p, 1); err == nil && len(imgs) > 0 {
-		firstFrame = &imgs[0]
+	if len(refs) > 0 {
+		firstFrame = &refs[0]
 	}
 
 	// Clamp options: seconds per shot 4..8 (default 8), shots 1..4 (default 1).
@@ -456,7 +457,7 @@ func (s *Server) generate(w http.ResponseWriter, r *http.Request) {
 	vid := s.curVid()
 	jobs := make([]*model.Job, 0, shots)
 	for i := 0; i < shots; i++ {
-		job, err := vid.Start(id, pp.Format, pp.AudioMode, promptText, firstFrame, dur)
+		job, err := vid.Start(id, pp.Format, pp.AudioMode, videoPrompt, imagePrompt, refs, firstFrame, dur)
 		if err != nil {
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return

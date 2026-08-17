@@ -64,6 +64,33 @@ func BuildVeo(p model.Product) string {
 	return trimRunes(b.String(), 1500)
 }
 
+// BuildVeoImage produces a COMPACT image prompt for the opening frame: the
+// model wearing the garment in the scene (Pose 1). This image is generated
+// first, then handed to Veo as the video's first frame.
+func BuildVeoImage(p model.Product) string {
+	F := fmtFor(p.Format)
+	base := ResolveBase(p)
+
+	C := Sanitize(EnOnly(p.HeroColor, "cream white"))
+	garment := Sanitize(EnOnly(p.Garment, "a fitted knit top"))
+	bottom := Sanitize(EnOnly(p.Bottom, "high-waisted trousers"))
+	shoes := ""
+	if F.Feet {
+		shoes = " " + Sanitize(EnOnly(p.Shoes, "plain white sneakers")) + " on her feet."
+	}
+	idBrief := firstSentence(base.Identity)
+	styleBrief := firstSentence(base.Style)
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "A vertical 9:16 photo. %s She wears %s in %s, with %s.%s\n\n", idBrief, garment, C, bottom, shoes)
+	fmt.Fprintf(&b, "%s\n\n", trimRunes(styleBrief, 200))
+	fmt.Fprintf(&b, "SETTING: %s\n\n", trimRunes(F.Setting, 260))
+	fmt.Fprintf(&b, "%s\n\n", trimRunes(F.Pose1, 320))
+	b.WriteString("Use the attached reference photo as the exact source of truth for the garment — copy its neckline, sleeves, hem and fabric, changing only the colour to the stated one. Neutral daylight white balance, clean true colour, realistic skin and texture. No text, no logos, no watermark.")
+
+	return trimRunes(b.String(), 1500)
+}
+
 // firstSentence returns text up to (and including) the first sentence-ending period.
 func firstSentence(s string) string {
 	s = strings.TrimSpace(s)

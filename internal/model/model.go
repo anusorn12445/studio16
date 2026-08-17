@@ -123,7 +123,8 @@ type Job struct {
 	Prompt          string `json:"prompt"`
 	Provider  string `json:"provider"` // "gemini-veo"
 	OpName    string `json:"opName"`   // provider operation id for polling
-	Status    string `json:"status"`   // queued | running | done | error
+	Status    string `json:"status"`   // queued | image | running | done | error
+	ImagePath string `json:"imagePath"` // generated first-frame image, if any
 	VideoPath string `json:"videoPath"`
 	Error     string `json:"error"`
 	CreatedAt int64  `json:"createdAt"`
