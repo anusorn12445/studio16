@@ -591,6 +591,12 @@ func Build(p model.Product) string {
 		"- In Step 2, the Step 1 image outranks the text wherever they differ on\n" +
 		"  face, hair, skin tone or location.\n" +
 		"- Never mention any price in dialogue.\n" +
+		"- CONTENT OF SPEECH — every spoken line is about the top being sold and\n" +
+		"  nothing else: its look, cut, neckline, straps, fabric, colour, fit and\n" +
+		"  how to wear or style it. She never talks about the location, the room,\n" +
+		"  the cafe, the coffee or any drink, the food, the weather, her day, the\n" +
+		"  camera or anything unrelated to the garment. Keep 100 percent of the\n" +
+		"  dialogue on this one piece of clothing.\n" +
 		"- Framing is fixed in both videos. The camera never drifts, dollies,\n" +
 		"  pushes in or pulls back, and the subject never changes size in frame.\n" +
 		"- Nothing may enter or leave the frame during a clip.\n" +
