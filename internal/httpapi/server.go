@@ -85,6 +85,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/products/{id}/images/{imgId}", s.deleteImage)
 
 	mux.HandleFunc("POST /api/products/{id}/analyze", s.analyze)
+	mux.HandleFunc("POST /api/products/{id}/script", s.makeScript)
 	mux.HandleFunc("GET /api/products/{id}/prompt", s.buildPrompt)
 	mux.HandleFunc("POST /api/products/{id}/generate", s.generate)
 	mux.HandleFunc("GET /api/products/{id}/report", s.getReport)
@@ -356,6 +357,53 @@ func (s *Server) analyze(w http.ResponseWriter, r *http.Request) {
 		}
 		out, _ := json.Marshal(merged)
 		return json.Unmarshal(out, p)
+	})
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
+// makeScript uses a text model to write the Thai spoken lines and saves them
+// onto the product (Scripts[0]).
+func (s *Server) makeScript(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	p, err := s.store.Get(id)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
+	defer cancel()
+
+	out, err := s.analyzer(r.URL.Query().Get("provider")).GenerateText(ctx, prompt.ScriptPrompt(*p))
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	js, err := prompt.ExtractJSON(out)
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	var got struct {
+		Lines []string `json:"lines"`
+	}
+	if json.Unmarshal([]byte(js), &got) != nil || len(got.Lines) == 0 {
+		writeErr(w, http.StatusBadGateway, "บทที่ได้ไม่ถูกต้อง")
+		return
+	}
+	lines := got.Lines
+	for len(lines) < 4 {
+		lines = append(lines, "")
+	}
+	lines = lines[:4]
+
+	updated, err := s.store.Update(id, func(p *model.Product) error {
+		p.Scripts = []model.Script{{Lines: lines}}
+		p.Pick = 0
+		return nil
 	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())

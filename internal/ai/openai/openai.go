@@ -120,6 +120,10 @@ func (c *Client) AnalyzePhotos(ctx context.Context, imgs []ai.Image, shopDesc, f
 	return prompt.ExtractJSON(out)
 }
 
+func (c *Client) GenerateText(ctx context.Context, promptText string) (string, error) {
+	return c.chat(ctx, nil, promptText, 700)
+}
+
 func (c *Client) ScoreMatch(ctx context.Context, refs []ai.Image, candidate ai.Image, specText string) (ai.MatchResult, error) {
 	// Reference photos first, then the candidate to be judged.
 	imgs := append([]ai.Image{}, refs...)

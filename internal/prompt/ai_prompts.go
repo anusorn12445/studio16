@@ -4,7 +4,45 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"studio16/internal/model"
 )
+
+// ScriptPrompt asks the model to write four short Thai spoken lines (2 per
+// scene) for the review, focused entirely on the garment.
+func ScriptPrompt(p model.Product) string {
+	name := strings.TrimSpace(p.TypeTh)
+	if name == "" {
+		name = strings.TrimSpace(p.Type)
+	}
+	if name == "" {
+		name = "เสื้อผ้าชิ้นนี้"
+	}
+	var b strings.Builder
+	b.WriteString("คุณเขียนบทพูดสั้นๆ ภาษาไทย สำหรับคลิปรีวิวเสื้อผ้าลง TikTok/Shopee สไตล์คนจริงคุยกับเพื่อน ไม่ใช่พนักงานขาย น้ำเสียงอบอุ่นเป็นกันเอง\n\n")
+	fmt.Fprintf(&b, "สินค้า: %s", name)
+	if c := strings.TrimSpace(p.HeroColor); c != "" {
+		fmt.Fprintf(&b, " สี %s", c)
+	}
+	b.WriteString("\n")
+	sp := p.Spec
+	add := func(label, v string) {
+		if strings.TrimSpace(v) != "" {
+			fmt.Fprintf(&b, "- %s: %s\n", label, v)
+		}
+	}
+	add("เนื้อผ้า", sp.Fabric)
+	add("ทรง/ฟิต", sp.Fit)
+	add("คอเสื้อ", sp.Neckline)
+	add("ชายเสื้อ", sp.Hem)
+	if d := strings.TrimSpace(p.Desc); d != "" {
+		fmt.Fprintf(&b, "คำบรรยายร้าน: %s\n", d)
+	}
+	b.WriteString("\nเขียนบทพูด 4 ประโยค (ฉาก 1 สองประโยค, ฉาก 2 สองประโยค) แต่ละประโยคสั้นพูดจบใน 3-4 วินาที เป็นธรรมชาติ พูดถึง \"ตัวเสื้อผ้า\" เท่านั้น — ทรง เนื้อผ้า สี การใส่และการแมทช์ ห้ามพูดถึงสถานที่ อาหาร เครื่องดื่ม อากาศ หรือราคา\n\n")
+	b.WriteString("ตอบเป็น JSON เท่านั้น ห้ามมีข้อความอื่น ห้ามมี markdown:\n")
+	b.WriteString(`{"lines":["ประโยคที่ 1","ประโยคที่ 2","ประโยคที่ 3","ประโยคที่ 4"]}`)
+	return b.String()
+}
 
 // ExtractJSON pulls a JSON object out of a model reply, tolerating markdown
 // fences and surrounding prose. Ported from STUDIO 16's extractJSON().

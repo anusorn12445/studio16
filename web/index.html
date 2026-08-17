@@ -288,7 +288,7 @@ function infoPanel(p){
       '<label class="f"><span class="lbl">โหมดเสียง</span><select id="f_audio">'+opt(['talk','laugh','silent'],p.audioMode,['พูด','หัวเราะ','เงียบ'])+'</select></label>'+
     '</div>'+
     '<label class="f"><span class="lbl">คำบรรยายร้าน (ช่วย AI อ่านรูป)</span><textarea id="f_desc" style="font-family:var(--sans);font-size:14px">'+esc(p.desc)+'</textarea></label>'+
-    '<div class="row" style="margin-bottom:16px"><button class="btn y" onclick="saveInfo()">บันทึกข้อมูล</button><button class="btn" style="color:#FF9E9E" onclick="delProduct()">ลบสินค้า</button></div>'+
+    '<div class="row" style="margin-bottom:16px"><button class="btn o" onclick="goCreateClip()">🎬 สร้างคลิป →</button><button class="btn y" onclick="saveInfo()">บันทึกข้อมูล</button><button class="btn" style="color:#FF9E9E" onclick="delProduct()">ลบสินค้า</button></div>'+
     '<div class="lbl">รูปสินค้า</div><div class="shelf">'+imgs+'<label class="ph" style="display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);border-style:dashed">+ รูป<input type="file" accept="image/*" multiple style="display:none" onchange="uploadImgs(this)"></label></div>'+
     '<div class="row" style="margin:14px 0"><select id="f_prov" style="width:auto">'+opt(['openai','gemini'],'openai')+'</select><button class="btn" id="analyzeBtn" onclick="analyze()">อ่านรูป → เติมสเปกอัตโนมัติ</button></div>'+
     '<div class="lbl">สเปกที่อ่านได้</div><div class="pre" style="max-height:240px">'+(specTxt?esc(specTxt):'— ยังไม่มี กด “อ่านรูป” —')+'</div>';
@@ -298,6 +298,11 @@ async function saveInfo(){
   const g=id=>document.getElementById(id).value;
   try{ await jpatch('/api/products/'+cur,{name:g('f_name'),type:g('f_type'),heroColor:g('f_hero'),format:g('f_fmt'),audioMode:g('f_audio'),desc:g('f_desc')});
     await reloadProducts(); toast('บันทึกแล้ว'); renderPlist(); clipView(); }catch(e){ toast(e.message,1); }
+}
+async function goCreateClip(){
+  const g=id=>document.getElementById(id).value;
+  try{ await jpatch('/api/products/'+cur,{name:g('f_name'),type:g('f_type'),heroColor:g('f_hero'),format:g('f_fmt'),audioMode:g('f_audio'),desc:g('f_desc')}); await reloadProducts(); }catch(e){}
+  tab='prompt'; clipView();
 }
 async function delProduct(){
   if(!confirm('ลบสินค้านี้และรูปทั้งหมด?')) return;
@@ -319,19 +324,41 @@ async function analyze(){
 
 function promptPanel(p){
   const el=document.getElementById('panel');
-  el.innerHTML='<div class="row" style="margin-bottom:10px">'+
-    '<select id="p_fmt" style="width:auto">'+opt(['mirror','cafe','pair','hyrox'],p.format,['ยืนหน้ากระจก','คาเฟ่','จับคู่สี','กีฬา HYROX'])+'</select>'+
-    '<select id="p_audio" style="width:auto">'+opt(['talk','laugh','silent'],p.audioMode,['พูด','หัวเราะ','เงียบ'])+'</select>'+
-    '<button class="btn" onclick="buildPrompt()">สร้างพรอมต์</button></div>'+
-    '<div class="row" style="margin-bottom:12px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px">'+
+  const sc=(p.scripts&&p.scripts[0]&&p.scripts[0].lines)||['','','',''];
+  el.innerHTML=
+    '<div class="lbl">ขั้น 1 · บทพูด (ไทย)</div>'+
+    '<div class="row" style="margin:6px 0 8px"><button class="btn" id="scriptBtn" onclick="makeScript()">🎬 สร้างสคริป (AI คิดบทไทย)</button><span class="muted" style="font-size:12px">คิดบท 4 ประโยค พูดถึงเสื้อผ้าเท่านั้น</span></div>'+
+    [0,1,2,3].map(i=>'<input class="inp" id="sc_'+i+'" placeholder="ประโยคที่ '+(i+1)+'" value="'+esc(sc[i]||'')+'" style="margin-bottom:6px">').join('')+
+    '<button class="btn" onclick="saveScript()" style="margin:2px 0 18px">บันทึกบท</button>'+
+    '<div class="lbl">ขั้น 2 · พรอมต์</div>'+
+    '<div class="row" style="margin:6px 0 8px">'+
+      '<select id="p_fmt" style="width:auto">'+opt(['mirror','cafe','pair','hyrox'],p.format,['ยืนหน้ากระจก','คาเฟ่','จับคู่สี','กีฬา HYROX'])+'</select>'+
+      '<select id="p_audio" style="width:auto">'+opt(['talk','laugh','silent'],p.audioMode,['พูด','หัวเราะ','เงียบ'])+'</select>'+
+      '<button class="btn" onclick="buildPrompt()">สร้างพรอมต์</button>'+
+      '<button class="btn" style="padding:8px 11px;font-size:12px" onclick="copyPrompt()">คัดลอก</button></div>'+
+    '<div id="riskbox"></div>'+
+    '<div class="pre" id="promptbox" style="margin-bottom:18px">— กด สร้างพรอมต์ —</div>'+
+    '<div class="lbl">ขั้น 3 · วิดีโอ</div>'+
+    '<div class="row" style="margin-top:6px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px">'+
       '<span class="lbl">จำนวนช็อต</span><input id="p_shots" type="number" min="1" max="4" value="1" style="width:64px" oninput="updTotal()">'+
       '<span class="lbl" style="margin-left:6px">วินาที/ช็อต</span><select id="p_dur" style="width:auto" onchange="updTotal()">'+opt([4,6,8],8)+'</select>'+
       '<span class="muted" id="p_total" style="font-size:12.5px;margin-left:6px"></span>'+
-      '<button class="btn o" style="margin-left:auto" onclick="genVideo()">▶ เจนวิดีโอ Veo</button></div>'+
-    '<div id="riskbox"></div>'+
-    '<div class="row" style="margin-bottom:8px"><span class="lbl">พรอมต์</span><button class="btn" style="margin-left:auto;padding:5px 11px;font-size:12px" onclick="copyPrompt()">คัดลอก</button></div>'+
-    '<div class="pre" id="promptbox">— กด “สร้างพรอมต์” —</div>';
+      '<button class="btn o" style="margin-left:auto" onclick="genVideo()">▶ เจนวิดีโอ Veo</button></div>';
   updTotal();
+}
+async function makeScript(){
+  const b=document.getElementById('scriptBtn'); b.disabled=true; b.textContent='กำลังคิดบท…';
+  try{ const p=await jpost('/api/products/'+cur+'/script',{}); await reloadProducts();
+    const sc=(p.scripts&&p.scripts[0]&&p.scripts[0].lines)||['','','',''];
+    [0,1,2,3].forEach(i=>{const el=document.getElementById('sc_'+i); if(el) el.value=sc[i]||'';});
+    toast('สร้างบทแล้ว'); }
+  catch(e){ toast(e.message,1); }
+  finally{ const bb=document.getElementById('scriptBtn'); if(bb){ bb.disabled=false; bb.textContent='🎬 สร้างสคริป (AI คิดบทไทย)'; } }
+}
+async function saveScript(){
+  const lines=[0,1,2,3].map(i=>document.getElementById('sc_'+i).value);
+  try{ await jpatch('/api/products/'+cur,{scripts:[{lines}],pick:0}); await reloadProducts(); toast('บันทึกบทแล้ว'); }
+  catch(e){ toast(e.message,1); }
 }
 function updTotal(){
   const sh=parseInt((document.getElementById('p_shots')||{}).value,10)||1;

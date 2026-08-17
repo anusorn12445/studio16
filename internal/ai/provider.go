@@ -27,6 +27,8 @@ type Analyzer interface {
 	// ScoreMatch compares a candidate image against reference photos and the
 	// written spec, returning a 0-100 match score and any mismatches.
 	ScoreMatch(ctx context.Context, refs []Image, candidate Image, specText string) (MatchResult, error)
+	// GenerateText runs a plain text completion (used for writing the Thai script).
+	GenerateText(ctx context.Context, prompt string) (string, error)
 }
 
 // VideoStatus is the state of an async video generation operation.
