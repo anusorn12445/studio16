@@ -231,7 +231,9 @@ function refreshPlist(){
 }
 function renderPlist(){ refreshPlist(); }
 async function newProduct(){
-  try{ const p=await jpost('/api/products',{}); cur=p.id; tab='info'; await reloadProducts(); renderNav(); renderMain(); toast('สร้างสินค้าใหม่'); }
+  const leaf=catPath[catPath.length-1];
+  const body = leaf==='sport' ? {format:'hyrox'} : {};
+  try{ const p=await jpost('/api/products',body); cur=p.id; tab='info'; await reloadProducts(); renderNav(); renderMain(); toast(leaf==='sport'?'สร้างสินค้ากีฬา (HYROX)':'สร้างสินค้าใหม่'); }
   catch(e){ toast(e.message,1); }
 }
 
@@ -273,7 +275,7 @@ function infoPanel(p){
       '<label class="f"><span class="lbl">ชื่อสินค้า</span><input id="f_name" value="'+esc(p.name)+'"></label>'+
       '<label class="f"><span class="lbl">ประเภท (อังกฤษ)</span><input id="f_type" value="'+esc(p.type)+'"></label>'+
       '<label class="f"><span class="lbl">สีหลัก</span><input id="f_hero" value="'+esc(p.heroColor)+'"></label>'+
-      '<label class="f"><span class="lbl">ฟอร์แมต</span><select id="f_fmt">'+opt(['mirror','cafe','pair'],p.format,['ยืนหน้ากระจก','คาเฟ่','จับคู่สี'])+'</select></label>'+
+      '<label class="f"><span class="lbl">ฟอร์แมต</span><select id="f_fmt">'+opt(['mirror','cafe','pair','hyrox'],p.format,['ยืนหน้ากระจก','คาเฟ่','จับคู่สี','กีฬา HYROX'])+'</select></label>'+
       '<label class="f"><span class="lbl">โหมดเสียง</span><select id="f_audio">'+opt(['talk','laugh','silent'],p.audioMode,['พูด','หัวเราะ','เงียบ'])+'</select></label>'+
     '</div>'+
     '<label class="f"><span class="lbl">คำบรรยายร้าน (ช่วย AI อ่านรูป)</span><textarea id="f_desc" style="font-family:var(--sans);font-size:14px">'+esc(p.desc)+'</textarea></label>'+
@@ -309,7 +311,7 @@ async function analyze(){
 function promptPanel(p){
   const el=document.getElementById('panel');
   el.innerHTML='<div class="row" style="margin-bottom:10px">'+
-    '<select id="p_fmt" style="width:auto">'+opt(['mirror','cafe','pair'],p.format,['ยืนหน้ากระจก','คาเฟ่','จับคู่สี'])+'</select>'+
+    '<select id="p_fmt" style="width:auto">'+opt(['mirror','cafe','pair','hyrox'],p.format,['ยืนหน้ากระจก','คาเฟ่','จับคู่สี','กีฬา HYROX'])+'</select>'+
     '<select id="p_audio" style="width:auto">'+opt(['talk','laugh','silent'],p.audioMode,['พูด','หัวเราะ','เงียบ'])+'</select>'+
     '<button class="btn" onclick="buildPrompt()">สร้างพรอมต์</button></div>'+
     '<div class="row" style="margin-bottom:12px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px">'+

@@ -160,6 +160,43 @@ var FORMATS = []Format{
 			`7.0s-8.0s — Model B raises her index finger and points clearly toward the bottom-left corner of the frame, holding the gesture. Model A keeps smiling beside her. The wall behind them is completely unchanged.`,
 		},
 	},
+	{
+		ID:   "hyrox",
+		Th:   "กีฬา HYROX",
+		Tag:  "มีบทพูด · สายฟิตเนส",
+		Desc: "รีวิวชุดกีฬาในสนามฟังก์ชันแนว HYROX โชว์ทรงและการเคลื่อนไหวจริงตอนออกกำลัง",
+
+		Voice: true,
+		Feet:  true,
+
+		Props:   `Nothing in her hands.`,
+		Setting: `A bright indoor functional-fitness arena in the style of a HYROX race: black rubber flooring beside a lane of artificial turf, a weighted sled resting on the turf, a neat stack of wall balls, a rowing machine and a row of sandbags along the back wall, matte black rig frames. High industrial ceiling with even white lighting. The layout is fixed: the equipment never moves and no additional objects appear.`,
+		Light:   `Bright even indoor sports-hall lighting around 5000K, clean and neutral, flat and soft across the whole body with no hard shadows. No coloured stage lights, no haze, no spotlights. The colour temperature and intensity stay constant from the first frame to the last.`,
+		Camera:  `Vertical 9:16, shot on a phone locked on a tripod at chest height, straight on and square, fixed framing at a fixed distance. Only micro-jitter of one or two pixels, no drift, no dolly, no push-in, no pull-back. She occupies the same proportion of the frame in the last second as in the first. Framed full length from just above the top of her head down to her shoes.`,
+		Neg:     `no other athletes, no crowd, no coach, no referee, no spectators, no barbell, no dropped weights, no chalk cloud, no coloured stage lighting, no haze, no smoke, no motion blur on the body,`,
+		Clip:    `sportswear review video`,
+		Cont:    `same arena, same outfit, same light`,
+
+		Pose1: `POSE — athletic ready stance, front on: She stands facing the camera in the marked lane wearing the activewear, feet about shoulder-width apart, one hand resting on her hip. Posture tall and relaxed with shoulders back, chin level, a calm confident half-smile as if between stations. The stance shows clearly how the outfit sits on the body.`,
+		Pose2: `POSE — functional movement hold: She holds a controlled low athletic squat with her hands resting on her thighs, turned about 20 degrees to one side, showing how the fabric stretches and stays in place across the hips and waist under effort. A candid mid-training moment, not a model pose.`,
+		Lock1: `She stays in the lane in place. Body rotation must never exceed 30 degrees.`,
+		Lock2: `She stays in the lane in place. Body rotation must never exceed 30 degrees; she never shows her back.`,
+
+		Amb: `quiet indoor sports-hall ambience — a faint echo, the low hum of a rowing machine, distant soft footfalls, no music and no crowd noise`,
+
+		T1: []string{
+			`0.0s-2.5s — Stands in the ready stance talking naturally to the camera about the outfit, with small easy gestures toward the fabric.`,
+			`2.5s-4.5s — Runs one hand down the side seam of the leggings and top to show the fit and how the fabric holds against the body.`,
+			`4.5s-6.5s — Performs one slow controlled squat to show the fabric moves with her and does not sag, ride up or go see-through, then stands back up.`,
+			`6.5s-8.0s — Rolls her shoulders once, gives a relaxed confident nod and a small smile. The equipment behind her is completely unchanged.`,
+		},
+		T2: []string{
+			`0.0s-3.0s — Angled stance, talks to the camera about the material — sweat-wicking, squat-proof and free to move in.`,
+			`3.0s-5.0s — Bends at the hips and reaches down toward a wall ball as if to grip it, without lifting it, showing the top stays in place when she folds forward, then rises.`,
+			`5.0s-6.5s — Settles upright, smooths the waistband once and gives a small honest smile toward the camera.`,
+			`6.5s-8.0s — Raises her free index finger and points clearly toward the bottom-left corner of the frame, holding the gesture. The arena behind her is completely unchanged.`,
+		},
+	},
 }
 
 // CAFE_ITEMS mirrors the HTML cafe table presets.
