@@ -54,7 +54,7 @@ func Load() Config {
 		GeminiImageModel:  env("GEMINI_IMAGE_MODEL", "gemini-2.5-flash-image"),
 		VeoModel:          env("VEO_MODEL", "veo-3.1-generate-preview"),
 
-		MatchThreshold: envInt("MATCH_THRESHOLD", 80),
+		MatchThreshold: envInt("MATCH_THRESHOLD", 60),
 		MatchProvider:  env("MATCH_PROVIDER", "openai"),
 		FFmpegPath:     env("FFMPEG_PATH", "ffmpeg"),
 	}
