@@ -243,7 +243,8 @@ function catUp(){ catPath=catPath.slice(0,-1); renderCatPanel(); }
 function refreshPlist(){
   const pl=document.getElementById('plist'); if(!pl) return;
   pl.innerHTML='';
-  products.forEach(p=>{
+  const curCat=catPath.join('/');
+  products.filter(p=>(p.category||'')===curCat).forEach(p=>{
     const thumb=(p.images&&p.images.length)
       ? '<img class="sw" src="'+assetURL(p.images[0].path)+'" alt="" style="object-fit:cover;background:var(--line)">'
       : '<span class="sw" style="background:#EDE6D6"></span>';
@@ -264,7 +265,9 @@ async function delProductFromList(id){
 function renderPlist(){ refreshPlist(); }
 async function newProduct(){
   const leaf=catPath[catPath.length-1];
-  const body = leaf==='sport' ? {format:'hyrox'} : {};
+  const body={};
+  if(catPath.length) body.category=catPath.join('/');
+  if(leaf==='sport') body.format='hyrox';
   try{ const p=await jpost('/api/products',body); cur=p.id; tab='info'; await reloadProducts(); renderNav(); renderMain(); toast(leaf==='sport'?'สร้างสินค้ากีฬา (HYROX)':'สร้างสินค้าใหม่'); }
   catch(e){ toast(e.message,1); }
 }
@@ -311,22 +314,31 @@ function infoPanel(p){
       '<label class="f"><span class="lbl">ฟอร์แมต</span><select id="f_fmt">'+opt(['mirror','cafe','pair','hyrox'],p.format,['ยืนหน้ากระจก','คาเฟ่','จับคู่สี','กีฬา HYROX'])+'</select></label>'+
       '<label class="f"><span class="lbl">โหมดเสียง</span><select id="f_audio">'+opt(['talk','laugh','silent'],p.audioMode,['พูด','หัวเราะ','เงียบ'])+'</select></label>'+
       '<label class="f"><span class="lbl">คาแรคเตอร์ (Base)</span><select id="f_char">'+(presets.length?presets.map(b=>'<option value="'+b.id+'"'+(p.basePresetId===b.id?' selected':'')+'>'+esc(b.name)+'</option>').join(''):'<option value="">(ค่าเริ่มต้น)</option>')+'</select></label>'+
+      '<label class="f"><span class="lbl">หมวดหมู่ *</span><select id="f_cat"><option value="">— เลือกหมวดหมู่ —</option>'+leafCategories().map(c=>'<option value="'+c.path+'"'+(p.category===c.path?' selected':'')+'>'+esc(c.label)+'</option>').join('')+'</select></label>'+
     '</div>'+
-    '<label class="f"><span class="lbl">คำบรรยายร้าน (ช่วย AI อ่านรูป)</span><textarea id="f_desc" style="font-family:var(--sans);font-size:14px">'+esc(p.desc)+'</textarea></label>'+
-    '<div class="row" style="margin-bottom:16px"><button class="btn o" onclick="goCreateClip()">🎬 สร้างคลิป →</button><button class="btn y" onclick="saveInfo()">บันทึกข้อมูล</button><button class="btn" style="color:#FF9E9E" onclick="delProduct()">ลบสินค้า</button></div>'+
     '<div class="lbl">รูปสินค้า</div><div class="shelf">'+imgs+'<label class="ph" style="display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);border-style:dashed">+ รูป<input type="file" accept="image/*" multiple style="display:none" onchange="uploadImgs(this)"></label></div>'+
     '<div class="row" style="margin:14px 0"><select id="f_prov" style="width:auto">'+opt(['openai','gemini'],'openai')+'</select><button class="btn" id="analyzeBtn" onclick="analyze()">อ่านรูป → เติมสเปกอัตโนมัติ</button></div>'+
-    '<div class="lbl">สเปกที่อ่านได้</div><div class="pre" style="max-height:240px">'+(specTxt?esc(specTxt):'— ยังไม่มี กด “อ่านรูป” —')+'</div>';
+    '<div class="lbl">สเปกที่อ่านได้</div><div class="pre" style="max-height:240px">'+(specTxt?esc(specTxt):'— ยังไม่มี กด “อ่านรูป” —')+'</div>'+
+    '<div class="row" style="margin-top:18px"><button class="btn y" onclick="saveInfo()">บันทึกข้อมูล</button><button class="btn" style="color:#FF9E9E" onclick="delProduct()">ลบสินค้า</button><button class="btn o" onclick="goCreateClip()">🎬 สร้างคลิป →</button></div>';
+}
+function leafCategories(){
+  const out=[]; const rev=CATTREE.children.review;
+  Object.keys(rev.children).forEach(tk=>{ const type=rev.children[tk];
+    if(type.children){ Object.keys(type.children).forEach(lk=>{ out.push({path:'review/'+tk+'/'+lk, label:type.name+' › '+type.children[lk].name}); }); }
+  });
+  return out;
 }
 function opt(vals,cur,labels){return vals.map((v,i)=>'<option value="'+v+'"'+(v===cur?' selected':'')+'>'+(labels?labels[i]:v)+'</option>').join('');}
 async function saveInfo(){
   const g=id=>document.getElementById(id).value;
-  try{ await jpatch('/api/products/'+cur,{name:g('f_name'),type:g('f_type'),heroColor:g('f_hero'),format:g('f_fmt'),audioMode:g('f_audio'),basePresetId:g('f_char'),desc:g('f_desc')});
+  const cat=g('f_cat'); if(!cat){ toast('เลือกหมวดหมู่ก่อนบันทึก',1); return; }
+  try{ await jpatch('/api/products/'+cur,{name:g('f_name'),type:g('f_type'),heroColor:g('f_hero'),format:g('f_fmt'),audioMode:g('f_audio'),basePresetId:g('f_char'),category:cat});
     await reloadProducts(); toast('บันทึกแล้ว'); renderPlist(); clipView(); }catch(e){ toast(e.message,1); }
 }
 async function goCreateClip(){
   const g=id=>document.getElementById(id).value;
-  try{ await jpatch('/api/products/'+cur,{name:g('f_name'),type:g('f_type'),heroColor:g('f_hero'),format:g('f_fmt'),audioMode:g('f_audio'),basePresetId:g('f_char'),desc:g('f_desc')}); await reloadProducts(); }catch(e){}
+  const cat=g('f_cat'); if(!cat){ toast('เลือกหมวดหมู่ก่อนบันทึก',1); return; }
+  try{ await jpatch('/api/products/'+cur,{name:g('f_name'),type:g('f_type'),heroColor:g('f_hero'),format:g('f_fmt'),audioMode:g('f_audio'),basePresetId:g('f_char'),category:cat}); await reloadProducts(); }catch(e){}
   tab='prompt'; clipView();
 }
 async function delProduct(){

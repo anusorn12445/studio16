@@ -61,7 +61,8 @@ type Product struct {
 	SizeNote  string   `json:"sizeNote"`
 	Desc      string   `json:"desc"`
 
-	Format    string `json:"format"`    // mirror | cafe | pair
+	Category  string `json:"category"`  // category path, e.g. review/clothing/sport
+	Format    string `json:"format"`    // mirror | cafe | pair | hyrox
 	AudioMode string `json:"audioMode"` // talk | laugh | silent
 
 	Wm    bool   `json:"wm"`
