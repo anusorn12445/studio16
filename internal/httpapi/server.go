@@ -434,7 +434,7 @@ func (s *Server) buildPrompt(w http.ResponseWriter, r *http.Request) {
 	// call; the default is the full agent pipeline prompt (for copy into an agent).
 	var text string
 	if r.URL.Query().Get("veo") == "1" {
-		text = prompt.BuildVeo(pp)
+		text = prompt.BuildVeo(pp, prompt.VeoOpts{})
 	} else {
 		text = prompt.Build(pp)
 	}
@@ -473,9 +473,8 @@ func (s *Server) generate(w http.ResponseWriter, r *http.Request) {
 		pp.AudioMode = req.Audio
 	}
 	// Two-step, both with SHORT prompts: generate an opening-frame image first
-	// (BuildVeoImage), then animate it with Veo (BuildVeo). Uploaded product
-	// photos are the garment reference and the fallback first frame.
-	videoPrompt := prompt.BuildVeo(pp)
+	// (BuildVeoImage), then animate it with Veo (per-shot BuildVeo). Uploaded
+	// product photos are the garment reference and the fallback first frame.
 	imagePrompt := prompt.BuildVeoImage(pp)
 	refs, _ := s.loadImages(p, 3)
 	var firstFrame *ai.Image
@@ -502,10 +501,14 @@ func (s *Server) generate(w http.ResponseWriter, r *http.Request) {
 		shots = 4
 	}
 
+	// Plan the shots as a connected story (hook → body → close) and give each
+	// shot its own line + role so the clips tell one continuous story.
 	vid := s.curVid()
-	jobs := make([]*model.Job, 0, shots)
-	for i := 0; i < shots; i++ {
-		job, err := vid.Start(id, pp.Format, pp.AudioMode, videoPrompt, imagePrompt, refs, firstFrame, dur)
+	beats := prompt.PlanBeats(pp, shots)
+	jobs := make([]*model.Job, 0, len(beats))
+	for i, beat := range beats {
+		vp := prompt.BuildVeo(pp, prompt.VeoOpts{Line: beat.Line, Role: beat.Role, Part: i + 1, Total: len(beats)})
+		job, err := vid.Start(id, pp.Format, pp.AudioMode, vp, imagePrompt, refs, firstFrame, dur)
 		if err != nil {
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return

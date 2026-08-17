@@ -14,7 +14,7 @@ import (
 // The Veo REST API instead wants one short video description, and rejects very
 // long strings ("exceeds the length limit"). BuildVeo distills Scene 1 into a
 // concise brief that stays well under that limit.
-func BuildVeo(p model.Product) string {
+func BuildVeo(p model.Product, o VeoOpts) string {
 	F := fmtFor(p.Format)
 	base := ResolveBase(p)
 
@@ -51,6 +51,9 @@ func BuildVeo(p model.Product) string {
 	if strings.TrimSpace(sc[0]) != "" {
 		thaiLine = strings.TrimSpace(sc[0])
 	}
+	if strings.TrimSpace(o.Line) != "" {
+		thaiLine = strings.TrimSpace(o.Line)
+	}
 	audioLine := `She speaks THAI only (ภาษาไทย) — never English. Warm and casual, like chatting with a friend, she says: "` + thaiLine + `" Her voice only, quiet natural ambience, no music, no second speaker.`
 	switch AM {
 	case "laugh":
@@ -61,8 +64,23 @@ func BuildVeo(p model.Product) string {
 
 	idBrief := firstSentence(base.Identity)
 
+	roleNote := ""
+	switch o.Role {
+	case "hook":
+		roleNote = "ROLE: this is the OPENING HOOK — she opens with an attention-grabbing beat and bright, energetic delivery so the viewer stops scrolling."
+	case "story":
+		roleNote = "ROLE: this is the MIDDLE of the review — she explains the garment naturally and shows the details."
+	case "close":
+		roleNote = "ROLE: this is the CLOSING — she looks straight into the camera, gives a warm sincere recommendation and invites the viewer to check it out or tap the link, a soft friendly sales close."
+	}
+	contLine := ""
+	if o.Total > 1 {
+		contLine = fmt.Sprintf("CONTINUITY: part %d of %d of one continuous review — same woman, same face, same outfit, same place and light as the other parts.\n\n", o.Part, o.Total)
+	}
+
 	var b strings.Builder
 	fmt.Fprintf(&b, "Full-frame vertical 9:16 portrait, 8-second single continuous take, no cuts — %s. The scene fills the whole frame edge to edge: no black bars, no letterboxing, no borders, no padding.\n\n", strings.TrimSuffix(F.Clip, "."))
+	b.WriteString(contLine)
 	hasRef := len(p.Images) > 0
 	subjGarment := garment + " in " + C
 	consist := fmt.Sprintf("CONSISTENCY: the garment's neckline, hem, fabric and %s colour stay identical every frame; the hem stays over the waistband, no skin between top and bottom; neutral daylight, no warm/yellow cast.\n\n", C)
@@ -72,13 +90,16 @@ func BuildVeo(p model.Product) string {
 	}
 	fmt.Fprintf(&b, "SUBJECT: %s She wears %s, with %s.%s\n\n", idBrief, subjGarment, bottom, shoes)
 	fmt.Fprintf(&b, "AUDIO: %s\n\n", audioLine)
-	fmt.Fprintf(&b, "SETTING: %s\n\n", trimRunes(F.Setting, 200))
+	if roleNote != "" {
+		b.WriteString(roleNote + "\n\n")
+	}
+	fmt.Fprintf(&b, "SETTING: %s\n\n", trimRunes(F.Setting, 190))
 	b.WriteString("CAMERA: phone locked on a tripod, fixed 9:16 framing, eye/chest level. No drift, no dolly, no zoom; she stays the same size in frame; the background stays static.\n\n")
-	fmt.Fprintf(&b, "ACTION: %s\n\n", trimRunes(timing, 340))
+	fmt.Fprintf(&b, "ACTION: %s\n\n", trimRunes(timing, 300))
 	b.WriteString(consist)
 	b.WriteString("Avoid: black bars, letterboxing, borders or padding, any English speech, camera drift or zoom, changing the garment, exposed waist, extra people, on-screen text or logos, distorted hands, robotic motion.")
 
-	return trimRunes(b.String(), 1700)
+	return trimRunes(b.String(), 1850)
 }
 
 // BuildVeoImage produces a COMPACT image prompt for the opening frame: the
@@ -125,6 +146,50 @@ func firstSentence(s string) string {
 		return s[:i+1]
 	}
 	return s
+}
+
+// VeoOpts carries per-shot narrative context so a batch of shots tells one
+// connected story (hook → body → close) instead of identical clips.
+type VeoOpts struct {
+	Line  string // the Thai line this shot speaks
+	Role  string // "hook" | "story" | "close" | ""
+	Part  int    // 1-based part index
+	Total int    // total parts in this story
+}
+
+// Beat is one planned shot: which line to speak and its narrative role.
+type Beat struct {
+	Line string
+	Role string
+}
+
+func firstNonEmpty(ss ...string) string {
+	for _, s := range ss {
+		if strings.TrimSpace(s) != "" {
+			return strings.TrimSpace(s)
+		}
+	}
+	return ""
+}
+
+// PlanBeats maps the product's 4 script lines (hook, body1, body2, close) onto
+// `shots` connected beats so the clips form one story arc.
+func PlanBeats(p model.Product, shots int) []Beat {
+	sc := ActiveScript(p)
+	hook, b1, b2, cl := strings.TrimSpace(sc[0]), strings.TrimSpace(sc[1]), strings.TrimSpace(sc[2]), strings.TrimSpace(sc[3])
+	if shots < 1 {
+		shots = 1
+	}
+	switch shots {
+	case 1:
+		return []Beat{{Line: firstNonEmpty(hook, b1, cl), Role: "hook"}}
+	case 2:
+		return []Beat{{Line: firstNonEmpty(hook, b1), Role: "hook"}, {Line: firstNonEmpty(cl, b2), Role: "close"}}
+	case 3:
+		return []Beat{{Line: firstNonEmpty(hook, b1), Role: "hook"}, {Line: firstNonEmpty(b1, b2), Role: "story"}, {Line: firstNonEmpty(cl, b2), Role: "close"}}
+	default:
+		return []Beat{{Line: hook, Role: "hook"}, {Line: b1, Role: "story"}, {Line: b2, Role: "story"}, {Line: cl, Role: "close"}}
+	}
 }
 
 // trimRunes caps a string to n runes, trimming back to the last space so it

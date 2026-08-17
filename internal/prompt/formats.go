@@ -163,8 +163,8 @@ var FORMATS = []Format{
 	{
 		ID:   "hyrox",
 		Th:   "กีฬา HYROX",
-		Tag:  "มีบทพูด · สายฟิตเนส",
-		Desc: "รีวิวชุดกีฬาในสนามฟังก์ชันแนว HYROX โชว์ทรงและการเคลื่อนไหวจริงตอนออกกำลัง",
+		Tag:  "มีบทพูด · วล็อกออกกำลัง HYROX",
+		Desc: "วล็อกรีวิวชุดกีฬาแบบออกกำลังจริง ทำท่า HYROX จริง (วอลบอล/เบอร์ปี/สเลด) โชว์ว่าชุดเวิร์กตอนเล่นจริง",
 
 		Voice: true,
 		Feet:  true,
@@ -177,24 +177,27 @@ var FORMATS = []Format{
 		Clip:    `sportswear review video`,
 		Cont:    `same arena, same outfit, same light`,
 
-		Pose1: `POSE — athletic ready stance, front on: She stands facing the camera in the marked lane wearing the activewear, feet about shoulder-width apart, one hand resting on her hip. Posture tall and relaxed with shoulders back, chin level, a calm confident half-smile as if between stations. The stance shows clearly how the outfit sits on the body.`,
-		Pose2: `POSE — functional movement hold: She holds a controlled low athletic squat with her hands resting on her thighs, turned about 20 degrees to one side, showing how the fabric stretches and stays in place across the hips and waist under effort. A candid mid-training moment, not a model pose.`,
-		Lock1: `She stays in the lane in place. Body rotation must never exceed 30 degrees.`,
-		Lock2: `She stays in the lane in place. Body rotation must never exceed 30 degrees; she never shows her back.`,
+		Pose1: `POSE — mid wall-ball, front on: She stands in the lane holding a weighted wall ball at her chest with both hands in a quarter-squat, elbows tucked in, ready to throw, wearing the activewear. Athletic and focused, weight through the heels, mid-workout — showing how the top and leggings sit and hold under real load.`,
+		Pose2: `POSE — top of a burpee, front on: She is standing tall at the top of a burpee, arms just coming down after the jump, chest lifted, breathing, wearing the activewear. Genuine effort, showing the top stayed down and in place through the movement, not a posed model shot.`,
+		Lock1: `She trains in the same spot in front of the equipment. She may squat, hinge, lunge, jump and reach for each rep, but she always returns to the same upright framing and never walks or drifts out of frame. Body rotation stays within about 30 degrees.`,
+		Lock2: `She trains in the same spot. She may squat, hinge and jump for each rep but returns to the same framing and never leaves the frame; body rotation stays within about 30 degrees and she never shows her back.`,
 
-		Amb: `quiet indoor sports-hall ambience — a faint echo, the low hum of a rowing machine, distant soft footfalls, no music and no crowd noise`,
+		Motion1: `Real athletic movement with genuine effort — she breathes, muscles work, and hair and fabric move with each rep — but every rep is controlled and returns to the same framing. Only she moves; the locked camera and the background never move. Nothing snaps, teleports or holds rigid.`,
+		Motion2: `Real athletic movement with genuine effort — controlled reps, visible breathing, hair and fabric carrying momentum and settling — always returning to the same framing. Only she moves; the camera and background stay locked. Nothing snaps or freezes.`,
+
+		Amb: `indoor sports-hall ambience — a faint echo, the soft thud of a wall ball, her own controlled breathing, distant footfalls, no music and no crowd noise`,
 
 		T1: []string{
-			`0.0s-2.5s — Stands in the ready stance talking naturally to the camera about the outfit, with small easy gestures toward the fabric.`,
-			`2.5s-4.5s — Runs one hand down the side seam of the leggings and top to show the fit and how the fabric holds against the body.`,
-			`4.5s-6.5s — Performs one slow controlled squat to show the fabric moves with her and does not sag, ride up or go see-through, then stands back up.`,
-			`6.5s-8.0s — Rolls her shoulders once, gives a relaxed confident nod and a small smile. The equipment behind her is completely unchanged.`,
+			`0.0s-3.0s — Performs two clean wall-ball reps: from a deep squat she drives up and throws the ball to a target overhead, catches it back at her chest and squats again. The top never rides up and no skin shows at the waist.`,
+			`3.0s-5.0s — Holds the ball at her chest, stands, slightly out of breath, and talks to the camera about how the outfit moved with her through the reps.`,
+			`5.0s-6.5s — Runs one hand down the side seam of the leggings to show they stayed put and squat-proof, still holding the ball in the other hand.`,
+			`6.5s-8.0s — Stands tall, wipes her brow with the back of her wrist and gives a confident nod. The equipment behind her is unchanged.`,
 		},
 		T2: []string{
-			`0.0s-3.0s — Angled stance, talks to the camera about the material — sweat-wicking, squat-proof and free to move in.`,
-			`3.0s-5.0s — Bends at the hips and reaches down toward a wall ball as if to grip it, without lifting it, showing the top stays in place when she folds forward, then rises.`,
-			`5.0s-6.5s — Settles upright, smooths the waistband once and gives a small honest smile toward the camera.`,
-			`6.5s-8.0s — Raises her free index finger and points clearly toward the bottom-left corner of the frame, holding the gesture. The arena behind her is completely unchanged.`,
+			`0.0s-3.0s — Performs one full burpee: squats down, hands to the floor, jumps her feet back to a plank, jumps them in and stands with a small hop. The top stays down and no skin shows at the waist.`,
+			`3.0s-5.0s — Stands, hands on hips, breathing, and talks to the camera about the fabric being sweat-wicking and staying opaque even bent over.`,
+			`5.0s-6.5s — Drops into one deep squat facing the camera, then rises, running a hand along the waistband to show it did not roll down.`,
+			`6.5s-8.0s — Raises her free index finger and points clearly toward the bottom-left corner of the frame, holding it while she breathes easy. The arena behind her is unchanged.`,
 		},
 	},
 }
