@@ -149,7 +149,7 @@ func BuildVeoImage(p model.Product, o VeoOpts) string {
 	}
 	fmt.Fprintf(&b, "SETTING: %s\n\n", trimRunes(F.Setting, 240))
 	fmt.Fprintf(&b, "%s\n\n", trimRunes(pose, 300))
-	b.WriteString(authLine + " CHARACTER LOCK: if one of the attached images shows a person, copy ONLY her face, hair and skin tone so it stays the same woman — but she MUST be in the new pose and doing the exercise described above, in a fresh composition. Do NOT copy the pose, the exercise, the crop, the equipment placement or the background from that person reference; only her identity carries over. Full-bleed 9:16 portrait, no black bars or borders, no text, no logos, no watermark.")
+	b.WriteString(authLine + " Use the attached photo for the GARMENT only, not for any person in it — the woman is the one described above. Full-bleed 9:16 portrait, no black bars or borders, no text, no logos, no watermark.")
 
 	return trimRunes(b.String(), 1700)
 }

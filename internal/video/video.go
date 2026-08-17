@@ -119,16 +119,12 @@ func (m *Manager) StartBatch(productID string, reqs []Request) ([]*model.Job, er
 }
 
 func (m *Manager) runBatch(productID string, ids []string, reqs []Request) {
-	var charRef *ai.Image
+	// Each shot is generated independently so every scene gets its own distinct
+	// pose/exercise. The woman stays consistent via the identity text in the
+	// prompt (passing shot 1's image as a reference made the model copy the whole
+	// frame — same pose — so it is intentionally not used here).
 	for i := range reqs {
-		req := reqs[i]
-		if charRef != nil {
-			req.CharRef = charRef
-		}
-		img := m.run(productID, ids[i], req)
-		if charRef == nil && img != nil {
-			charRef = img
-		}
+		m.run(productID, ids[i], reqs[i])
 	}
 }
 
