@@ -48,6 +48,8 @@ main{padding:22px 28px; min-width:0; overflow:auto}
 .cat:hover{background:var(--panel)} .cat.on{background:var(--panel);border-color:var(--signal)} .cat.soon{opacity:.45;cursor:default}
 .cat .ci{width:24px;height:24px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex:none;background:var(--panel);font-size:13px}
 .soontag{margin-left:auto;font-size:9.5px;color:var(--muted)}
+@keyframes slidein{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
+.slidein{animation:slidein .22s ease}
 .h{font-size:19px;font-weight:600} .sub{font-size:12.5px;color:var(--muted);margin-bottom:16px}
 .muted{color:var(--muted)} .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:14px 0;flex-wrap:wrap}
@@ -108,8 +110,26 @@ video{width:100%;border-radius:9px;border:1px solid var(--line);background:#000}
 
 <script>
 const NAV=[{k:'clip',name:'ทำคลิป',ic:'🎬'},{k:'prompts',name:'คลังพรอมต์',ic:'📚'},{k:'characters',name:'ตัวละคร',ic:'🎭'},{k:'clips',name:'คลังคลิป',ic:'🎞️'}];
-const CATS=[{id:'review',name:'รีวิวสินค้า',ic:'🛍️'},{id:'ad',name:'โฆษณาสั้น',ic:'📣',soon:true},{id:'lifestyle',name:'ไลฟ์สไตล์',ic:'✨',soon:true},{id:'unbox',name:'แกะกล่อง',ic:'📦',soon:true}];
-let nav='clip', products=[], cur=null, tab='info', presets=[], health=null, pollTimer=null, clipOpen=true;
+const CATTREE={ name:'หมวด', children:{
+  review:{ name:'รีวิวสินค้า', ic:'🛍️', children:{
+    clothing:{ name:'เสื้อผ้า', ic:'👕', children:{
+      sport:{name:'ชุดกีฬา',ic:'🏃'}, fashion:{name:'แฟชั่น',ic:'👗'}, formal:{name:'ทางการ',ic:'👔'}, casual:{name:'ลำลอง',ic:'🧥'}
+    }},
+    home:{ name:'ของใช้ในบ้าน', ic:'🏠', children:{
+      kitchen:{name:'เครื่องครัว',ic:'🍳'}, clean:{name:'ทำความสะอาด',ic:'🧼'}, decor:{name:'ของแต่งบ้าน',ic:'🪴'}, storage:{name:'จัดเก็บ',ic:'📦'}
+    }},
+    cosmetic:{ name:'เครื่องสำอาง', ic:'💄', children:{
+      skincare:{name:'สกินแคร์',ic:'🧴'}, makeup:{name:'เมคอัพ',ic:'💋'}, hair:{name:'ดูแลผม',ic:'💇'}, perfume:{name:'น้ำหอม',ic:'🌸'}
+    }},
+    supplement:{ name:'อาหารเสริม', ic:'💊', children:{
+      vitamin:{name:'วิตามิน',ic:'💊'}, collagen:{name:'คอลลาเจน',ic:'✨'}, weight:{name:'คุมน้ำหนัก',ic:'⚖️'}, gut:{name:'ดีท็อกซ์/ลำไส้',ic:'🌿'}
+    }},
+  }},
+  ad:{ name:'โฆษณาสั้น', ic:'📣', soon:true },
+  lifestyle:{ name:'ไลฟ์สไตล์', ic:'✨', soon:true },
+  unbox:{ name:'แกะกล่อง', ic:'📦', soon:true },
+}};
+let nav='clip', products=[], cur=null, tab='info', presets=[], health=null, pollTimer=null, clipOpen=true, catPath=[];
 
 async function api(path,opts){
   const r=await fetch(path,opts||{});
@@ -166,27 +186,38 @@ function renderNav(){
     if(n.k==='clip' && nav==='clip'){
       const sub=document.createElement('div');
       sub.id='clipsub'; sub.className='subnav'+(clipOpen?' open':'');
-      sub.innerHTML='<div id="ctrack" style="display:flex;width:200%;transition:transform .28s ease">'+
-        '<div style="width:50%;padding-right:6px"><div class="lbl">หมวด</div><div id="catlist"></div></div>'+
-        '<div style="width:50%;padding-left:6px"><button class="back" onclick="slideCats()">‹ หมวด</button><div id="plist"></div>'+
-        '<button class="newp" onclick="newProduct()">+ สินค้าใหม่</button></div></div>';
+      sub.innerHTML='<div id="catpanel"></div>';
       wrap.appendChild(sub);
-      fillClipSubNav();
+      renderCatPanel();
     }
   });
 }
-function fillClipSubNav(){
-  const cl=document.getElementById('catlist'); if(!cl) return;
-  cl.innerHTML='';
-  CATS.forEach(c=>{
-    const b=document.createElement('button');
-    b.className='cat'+(c.id==='review'?' on':'')+(c.soon?' soon':'');
-    b.innerHTML='<span class="ci">'+c.ic+'</span><span>'+c.name+'</span>'+(c.soon?'<span class="soontag">เร็วๆ นี้</span>':'');
-    if(!c.soon) b.onclick=slideProducts;
-    cl.appendChild(b);
-  });
-  refreshPlist();
+function nodeAt(path){ let node=CATTREE; for(const k of path){ node=(node.children||{})[k]; if(!node) return CATTREE; } return node; }
+function renderCatPanel(){
+  const panel=document.getElementById('catpanel'); if(!panel) return;
+  const node=nodeAt(catPath); const children=node.children;
+  let html='';
+  if(catPath.length>0){
+    const parentName=catPath.length===1?'หมวด':nodeAt(catPath.slice(0,-1)).name;
+    html+='<button class="back" onclick="catUp()">‹ '+esc(parentName)+'</button>';
+    html+='<div class="lbl" style="margin-top:2px">'+esc(node.name)+'</div>';
+  } else { html+='<div class="lbl">หมวด</div>'; }
+  if(children){
+    Object.keys(children).forEach(k=>{
+      const c=children[k], hasKids=!!c.children;
+      html+='<button class="cat'+(c.soon?' soon':'')+'"'+(c.soon?'':' onclick="catInto(\''+k+'\')"')+'>'+
+        '<span class="ci">'+(c.ic||'•')+'</span><span>'+esc(c.name)+'</span>'+
+        (c.soon?'<span class="soontag">เร็วๆ นี้</span>':(hasKids?'<span class="soontag" style="opacity:.55">›</span>':'<span class="soontag" style="opacity:.55">เลือก</span>'))+'</button>';
+    });
+  } else {
+    html+='<div id="plist"></div><button class="newp" onclick="newProduct()">+ สินค้าใหม่</button>';
+  }
+  panel.innerHTML=html;
+  if(!children) refreshPlist();
+  panel.classList.remove('slidein'); void panel.offsetWidth; panel.classList.add('slidein');
 }
+function catInto(k){ catPath=catPath.concat([k]); renderCatPanel(); }
+function catUp(){ catPath=catPath.slice(0,-1); renderCatPanel(); }
 function refreshPlist(){
   const pl=document.getElementById('plist'); if(!pl) return;
   pl.innerHTML='';
@@ -199,10 +230,8 @@ function refreshPlist(){
   });
 }
 function renderPlist(){ refreshPlist(); }
-function slideProducts(){ const t=document.getElementById('ctrack'); if(t) t.style.transform='translateX(-50%)'; }
-function slideCats(){ const t=document.getElementById('ctrack'); if(t) t.style.transform='translateX(0)'; }
 async function newProduct(){
-  try{ const p=await jpost('/api/products',{}); cur=p.id; tab='info'; await reloadProducts(); renderNav(); renderMain(); slideProducts(); toast('สร้างสินค้าใหม่'); }
+  try{ const p=await jpost('/api/products',{}); cur=p.id; tab='info'; await reloadProducts(); renderNav(); renderMain(); toast('สร้างสินค้าใหม่'); }
   catch(e){ toast(e.message,1); }
 }
 
