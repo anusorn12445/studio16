@@ -382,7 +382,14 @@ func (s *Server) buildPrompt(w http.ResponseWriter, r *http.Request) {
 		pp.BasePresetID = b
 		pp.BaseCustom = nil
 	}
-	text := prompt.Build(pp)
+	// ?veo=1 returns the compact single-video prompt used for the direct Veo API
+	// call; the default is the full agent pipeline prompt (for copy into an agent).
+	var text string
+	if r.URL.Query().Get("veo") == "1" {
+		text = prompt.BuildVeo(pp)
+	} else {
+		text = prompt.Build(pp)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"prompt": text,
 		"risks":  prompt.ScanRisk(text),
@@ -417,7 +424,9 @@ func (s *Server) generate(w http.ResponseWriter, r *http.Request) {
 	if req.Audio != "" {
 		pp.AudioMode = req.Audio
 	}
-	promptText := prompt.Build(pp)
+	// Direct Veo API needs a SHORT prompt — use the compact single-video build,
+	// not the full agent pipeline prompt (which Veo rejects as too long).
+	promptText := prompt.BuildVeo(pp)
 
 	// Use the first uploaded photo as the video's first frame, if any.
 	var firstFrame *ai.Image
