@@ -1,0 +1,17 @@
+{
+  "name": "studio16-go",
+  "image": "mcr.microsoft.com/devcontainers/go:1-1.22",
+  "forwardPorts": [8080],
+  "portsAttributes": {
+    "8080": { "label": "studio16 web", "onAutoForward": "openPreview" }
+  },
+  "remoteEnv": {
+    "PORT": "8080",
+    "WEB_DIR": "${containerWorkspaceFolder}/web",
+    "DATA_DIR": "${containerWorkspaceFolder}/data"
+  },
+  "postCreateCommand": "go build ./...",
+  "postAttachCommand": {
+    "server": "echo 'พร้อมแล้ว — สั่ง: go run ./cmd/server แล้วเปิดพอร์ต 8080'"
+  }
+}

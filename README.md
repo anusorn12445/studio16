@@ -12,6 +12,18 @@
 4. **เจนวิดีโอจริง** — ส่งพรอมต์ + รูปแรกไปให้ **Gemini Veo** (งาน async, poll จนเสร็จ, ดาวน์โหลดเก็บใน backend)
 5. **รีพอทตรวจสินค้าตรง/ไม่ตรง** — AI ให้คะแนน 0–100 ต่อรูปและต่อคลิป (ดึงเฟรมด้วย ffmpeg) แล้วตัด **ผ่าน/ไม่ผ่าน** ตาม threshold
 
+## รันผ่าน GitHub (Codespaces — ไม่ต้องใช้ localhost)
+
+1. บน GitHub หน้า repo กด **Code ▸ Codespaces ▸ Create codespace on main**
+2. รอ container สร้างเสร็จ (มี `.devcontainer` เตรียมไว้แล้ว) แล้วในเทอร์มินัลสั่ง:
+   ```bash
+   go run ./cmd/server
+   ```
+3. Codespaces จะเด้งพอร์ต **8080** ให้ กดเปิดเป็นเว็บได้เลย (ตั้ง Port Visibility เป็น Public ถ้าจะเปิดจากเครื่องอื่น)
+4. ใส่ **OPENAI_API_KEY / GEMINI_API_KEY** ผ่านปุ่ม ⚙️ ในเว็บ (เก็บใน `data/settings.json` ของ codespace) หรือใส่เป็น Codespaces Secrets
+
+> deploy แบบมี URL ถาวร: เชื่อม repo นี้กับ Render/Railway/Cloud Run (มี `Dockerfile` พร้อม) แล้วตั้ง env `OPENAI_API_KEY`, `GEMINI_API_KEY`
+
 ## รันด้วย Docker (แนะนำ)
 
 ```bash
