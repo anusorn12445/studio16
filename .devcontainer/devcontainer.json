@@ -10,8 +10,6 @@
     "WEB_DIR": "${containerWorkspaceFolder}/web",
     "DATA_DIR": "${containerWorkspaceFolder}/data"
   },
-  "postCreateCommand": "go build ./...",
-  "postAttachCommand": {
-    "server": "echo 'พร้อมแล้ว — สั่ง: go run ./cmd/server แล้วเปิดพอร์ต 8080'"
-  }
+  "postCreateCommand": "go build -o /tmp/studio16-server ./cmd/server",
+  "postAttachCommand": "pgrep -f studio16-server >/dev/null || nohup /tmp/studio16-server > /tmp/studio16.log 2>&1 &"
 }

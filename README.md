@@ -12,17 +12,21 @@
 4. **เจนวิดีโอจริง** — ส่งพรอมต์ + รูปแรกไปให้ **Gemini Veo** (งาน async, poll จนเสร็จ, ดาวน์โหลดเก็บใน backend)
 5. **รีพอทตรวจสินค้าตรง/ไม่ตรง** — AI ให้คะแนน 0–100 ต่อรูปและต่อคลิป (ดึงเฟรมด้วย ffmpeg) แล้วตัด **ผ่าน/ไม่ผ่าน** ตาม threshold
 
-## รันผ่าน GitHub (Codespaces — ไม่ต้องใช้ localhost)
+## รันผ่าน GitHub — พรีวิวโปรแกรมจริง 100%
 
-1. บน GitHub หน้า repo กด **Code ▸ Codespaces ▸ Create codespace on main**
-2. รอ container สร้างเสร็จ (มี `.devcontainer` เตรียมไว้แล้ว) แล้วในเทอร์มินัลสั่ง:
-   ```bash
-   go run ./cmd/server
-   ```
-3. Codespaces จะเด้งพอร์ต **8080** ให้ กดเปิดเป็นเว็บได้เลย (ตั้ง Port Visibility เป็น Public ถ้าจะเปิดจากเครื่องอื่น)
-4. ใส่ **OPENAI_API_KEY / GEMINI_API_KEY** ผ่านปุ่ม ⚙️ ในเว็บ (เก็บใน `data/settings.json` ของ codespace) หรือใส่เป็น Codespaces Secrets
+### ทางที่ 1 · Codespaces (แอปรันเองทันที)
 
-> deploy แบบมี URL ถาวร: เชื่อม repo นี้กับ Render/Railway/Cloud Run (มี `Dockerfile` พร้อม) แล้วตั้ง env `OPENAI_API_KEY`, `GEMINI_API_KEY`
+1. หน้า repo กด **`< > Code` ▸ Codespaces ▸ Create codespace on main**
+2. รอ ~1–2 นาที — devcontainer จะ **build + รันเซิร์ฟเวอร์ให้อัตโนมัติ** พอพอร์ต **8080** ขึ้น Codespaces จะเปิดพรีวิวให้เอง (ถ้าไม่เด้ง เปิดแท็บ **PORTS** แล้วกดไอคอนโลกที่พอร์ต 8080)
+3. ใส่ **OPENAI_API_KEY / GEMINI_API_KEY** ผ่านปุ่ม ⚙️ ในเว็บ (หรือตั้งเป็น Codespaces Secrets)
+
+> เซิร์ฟเวอร์รันจาก `/tmp/studio16-server` อัตโนมัติ (ดู log: `cat /tmp/studio16.log`). ถ้าจะรันเอง: `go run ./cmd/server`
+
+### ทางที่ 2 · Render (URL ถาวร เปิดจากที่ไหนก็ได้)
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/anusorn12445/studio16)
+
+หรือ Render ▸ **New ▸ Blueprint** ▸ เลือก repo นี้ (อ่าน `render.yaml` ให้เอง) → build `Dockerfile` → ได้ **URL สาธารณะ** ตั้งคีย์ `OPENAI_API_KEY`, `GEMINI_API_KEY` ในแดชบอร์ด
 
 ## รันด้วย Docker (แนะนำ)
 

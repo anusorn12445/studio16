@@ -1,0 +1,17 @@
+# Deploy studio16 to Render (https://render.com) straight from this repo.
+# In Render: New ▸ Blueprint ▸ pick this repo. Render builds the Dockerfile and
+# gives a public URL. Set the two API keys in the dashboard (they are not stored
+# in the repo). Data is ephemeral on the free plan — API keys entered via the ⚙️
+# UI reset on redeploy, so prefer setting them here as env vars.
+services:
+  - type: web
+    name: studio16
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    autoDeploy: true
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
