@@ -4,6 +4,7 @@ package video
 
 import (
 	"context"
+	"os"
 	"strings"
 	"time"
 
@@ -16,7 +17,7 @@ import (
 // and download its produced files.
 type Generator interface {
 	ai.VideoGenerator
-	GenerateImage(ctx context.Context, prompt string, refs []ai.Image) (ai.Image, error)
+	GenerateImage(ctx context.Context, prompt string, refs []ai.Image, seed int) (ai.Image, error)
 	DownloadVideo(ctx context.Context, uri string) ([]byte, error)
 }
 
@@ -119,11 +120,20 @@ func (m *Manager) StartBatch(productID string, reqs []Request) ([]*model.Job, er
 }
 
 func (m *Manager) runBatch(productID string, ids []string, reqs []Request) {
-	// Each shot is generated independently so every scene gets its own distinct
-	// pose/exercise. The woman stays consistent via the identity text in the
-	// prompt (passing shot 1's image as a reference made the model copy the whole
-	// frame — same pose — so it is intentionally not used here).
-	for i := range reqs {
+	if len(reqs) == 0 {
+		return
+	}
+	// Shot 1 establishes the character (face, hair, body, outfit). Every later shot
+	// is given shot 1's accepted frame as a CHARACTER reference so the SAME woman
+	// appears throughout, while the per-scene prompt + seed still make each shot its
+	// own distinct exercise/scene. (Duplicate frames were never caused by this —
+	// that was an id-collision bug in NewID, now fixed — so character locking is
+	// safe to use again.)
+	first := m.run(productID, ids[0], reqs[0])
+	for i := 1; i < len(reqs); i++ {
+		if first != nil {
+			reqs[i].CharRef = first
+		}
 		m.run(productID, ids[i], reqs[i])
 	}
 }
@@ -164,6 +174,37 @@ func (m *Manager) run(productID, jobID string, req Request) *ai.Image {
 	return frame
 }
 
+// RenderExisting renders the video for a job that already has an accepted image,
+// using the video prompt stored on the job. Used by the library's batch/single
+// "generate video" action so images and videos are decoupled.
+func (m *Manager) RenderExisting(productID, jobID string) {
+	p, err := m.store.Get(productID)
+	if err != nil {
+		return
+	}
+	var job model.Job
+	found := false
+	for _, j := range p.Jobs {
+		if j.ID == jobID {
+			job = j
+			found = true
+			break
+		}
+	}
+	if !found || job.ImagePath == "" || job.VideoPath != "" {
+		return
+	}
+	data, err := os.ReadFile(m.store.AbsPath(job.ImagePath))
+	if err != nil {
+		m.setJob(productID, jobID, func(j *model.Job) { j.Status = "error"; j.Error = "อ่านไฟล์รูปไม่สำเร็จ: " + err.Error() })
+		return
+	}
+	frame := &ai.Image{Mime: "image/jpeg", Data: data}
+	req := Request{VideoPrompt: job.Prompt, DurationSeconds: job.DurationSeconds}
+	m.setJob(productID, jobID, func(j *model.Job) { j.Status = "queued"; j.Error = "" })
+	go m.renderVideo(productID, jobID, req, frame)
+}
+
 // makeImage generates the opening-frame image, forces 9:16, and — when a Checker
 // is set — verifies it matches the product, retrying up to 3 times. If it still
 // doesn't match, it sets status "mismatch" and returns ok=false (no video).
@@ -183,20 +224,26 @@ func (m *Manager) makeImage(productID, jobID string, req Request) (*ai.Image, bo
 		m.setJob(productID, jobID, func(j *model.Job) { j.Status = "image"; j.Attempt = attempt })
 
 		genRefs := append([]ai.Image{}, req.Refs...)
-		if req.CharRef != nil { // lock the same face as an earlier shot
-			genRefs = append(genRefs, *req.CharRef)
-		}
 		imgPrompt := req.ImagePrompt
+		if req.CharRef != nil { // lock the same person as shot 1 (added LAST)
+			genRefs = append(genRefs, *req.CharRef)
+			imgPrompt = req.ImagePrompt +
+				"\n\nCHARACTER CONTINUITY: the LAST attached image is the SAME WOMAN from an earlier shot in this series. Keep her face, hairstyle, skin tone, body type and her exact outfit identical to that image. But this is a BRAND-NEW photograph — place her in the new scene and exercise described above, with a different pose, background and camera angle. Do NOT copy the pose, framing or background of that reference image."
+		}
 		if attempt > 1 && prevImg != nil && len(fixNotes) > 0 {
 			// Refine, don't restart: carry the previous attempt forward and fix
 			// only what was wrong, keeping the parts that already matched.
 			genRefs = append(genRefs, *prevImg)
-			imgPrompt = req.ImagePrompt +
+			imgPrompt = imgPrompt +
 				"\n\nREFINE — DO NOT START OVER: the LAST attached image is your previous attempt. Keep everything that is already correct in it exactly the same, and change ONLY what is needed to fix these problems so the garment matches the product reference photo: " +
 				strings.Join(fixNotes, "; ") + ". Do not alter anything that already matches."
 		}
 
-		img, err := m.gen.GenerateImage(ctx, imgPrompt, genRefs)
+		// A distinct seed per scene (and per retry) so no two shots — and no two
+		// attempts — render the same image. Scene index dominates so each shot in
+		// the batch is clearly different; +attempt varies refines.
+		seed := (req.Scene+1)*100003 + attempt*17 + 1
+		img, err := m.gen.GenerateImage(ctx, imgPrompt, genRefs, seed)
 		if err != nil {
 			if attempt >= 3 {
 				if frame == nil {

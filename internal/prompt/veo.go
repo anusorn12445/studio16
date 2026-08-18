@@ -2,6 +2,7 @@ package prompt
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"studio16/internal/model"
@@ -146,19 +147,26 @@ func BuildVeoImage(p model.Product, o VeoOpts) string {
 		authLine = "The attached reference photo is the exact source of truth for the garment: reproduce it faithfully — do not restyle it, do not change the neckline, sleeves or length, and do not change its colour. Keep the model's face and styling as described. Neutral daylight, realistic skin and texture."
 	}
 
-	var b strings.Builder
-	fmt.Fprintf(&b, "A full-frame vertical 9:16 portrait photo that fills the entire frame edge to edge — no black bars, no letterboxing, no borders, no padding. %s %s, with %s.%s\n\n", idBrief, wearLine, bottom, shoes)
-	fmt.Fprintf(&b, "%s\n\n", trimRunes(styleBrief, 200))
 	pose := F.Pose1
 	settingText := F.Setting
+	opening := fmt.Sprintf("A full-frame vertical 9:16 portrait photo that fills the entire frame edge to edge — no black bars, no letterboxing, no borders, no padding. %s %s, with %s.%s", idBrief, wearLine, bottom, shoes)
+	garmentNote := " Use the attached photo for the GARMENT only, not for any person in it — the woman is the one described above."
 	if p.Format == "hyrox" {
 		s := hyroxSceneAt(o.Scene)
 		settingText = s.setting
-		pose = "THIS SHOT'S HYROX EXERCISE IS " + strings.ToUpper(s.name) + " — a brand-new HYROX competition scene, clearly different from every other shot. POSE — she is " + s.pose + ", wearing the activewear, mid-workout, athletic and focused. CAMERA: " + s.camera + "."
+		pose = "POSE — she is " + s.pose + ", mid-workout, athletic and focused. CAMERA: " + s.camera + "."
+		// Lead with the EXERCISE + equipment + shot number so the model treats
+		// each scene as a distinct photograph instead of collapsing to one pose.
+		opening = "A full-frame vertical 9:16 ACTION photo — this is SHOT #" + strconv.Itoa(o.Scene+1) + " of a HYROX review series, and it MUST look completely different from the other shots: a different station, a different exercise, different equipment and a different camera angle. It shows a Thai woman mid-" + s.name + ", clearly using the " + s.name + " equipment — this exercise and its equipment are the main subject and must fill the frame. " + idBrief + " " + wearLine + ", with " + bottom + "." + shoes
+		garmentNote = " The attached photo shows ONLY the shirt's design, print and colour — copy the shirt's graphic exactly, but do NOT copy its pose, background, cropping or composition; dress the athlete in this new action scene."
 	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s\n\n", opening)
+	fmt.Fprintf(&b, "%s\n\n", trimRunes(styleBrief, 200))
 	fmt.Fprintf(&b, "SETTING: %s\n\n", trimRunes(settingText, 300))
 	fmt.Fprintf(&b, "%s\n\n", trimRunes(pose, 360))
-	b.WriteString(authLine + " Use the attached photo for the GARMENT only, not for any person in it — the woman is the one described above. Full-bleed 9:16 portrait, no black bars or borders, no text, no logos, no watermark.")
+	b.WriteString(authLine + garmentNote + " Full-bleed 9:16 portrait, no black bars or borders, no on-screen caption or watermark overlay (but keep the shirt's own printed graphic/logo exactly).")
 
 	return trimRunes(b.String(), 1700)
 }
@@ -237,6 +245,15 @@ func hyroxSceneAt(i int) hyroxScene {
 		return hyroxScene{}
 	}
 	return hyroxScenes[((i%n)+n)%n]
+}
+
+// SceneLabel is a short human label for scene i (used in the per-scene prompt UI).
+// For hyrox it names the exercise so the user sees each shot is a different scene.
+func SceneLabel(format string, i int) string {
+	if format == "hyrox" {
+		return hyroxSceneAt(i).name
+	}
+	return ""
 }
 
 // Beat is one planned shot: which line to speak and its narrative role.

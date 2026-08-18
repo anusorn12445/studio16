@@ -48,6 +48,8 @@ type imgGenReq struct {
 	Contents         []content `json:"contents"`
 	GenerationConfig struct {
 		ResponseModalities []string `json:"responseModalities"`
+		Temperature        float64  `json:"temperature,omitempty"`
+		Seed               *int     `json:"seed,omitempty"`
 	} `json:"generationConfig"`
 }
 
@@ -72,7 +74,7 @@ type imgGenResp struct {
 // reference photos (the garment), using the configured image model
 // ("Nano Banana" — Gemini image generation). The result is the opening frame
 // that Veo then animates.
-func (c *Client) GenerateImage(ctx context.Context, promptText string, refs []ai.Image) (ai.Image, error) {
+func (c *Client) GenerateImage(ctx context.Context, promptText string, refs []ai.Image, seed int) (ai.Image, error) {
 	if c.key == "" {
 		return ai.Image{}, fmt.Errorf("gemini: GEMINI_API_KEY not set")
 	}
@@ -89,6 +91,15 @@ func (c *Client) GenerateImage(ctx context.Context, promptText string, refs []ai
 	var req imgGenReq
 	req.Contents = []content{{Parts: parts}}
 	req.GenerationConfig.ResponseModalities = []string{"IMAGE"}
+	// Nano Banana is deterministic by default: given the same reference photo it
+	// returns byte-identical output no matter how the text prompt differs, so
+	// every shot in a batch collapsed to one image. A distinct seed per shot plus
+	// a non-zero temperature forces each shot to be a genuinely different render.
+	req.GenerationConfig.Temperature = 1.0
+	if seed != 0 {
+		s := seed
+		req.GenerationConfig.Seed = &s
+	}
 	body, _ := json.Marshal(req)
 
 	url := fmt.Sprintf("%s/models/%s:generateContent?key=%s", base, c.imageModel, c.key)

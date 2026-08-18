@@ -88,8 +88,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/products/{id}/analyze", s.analyze)
 	mux.HandleFunc("POST /api/products/{id}/script", s.makeScript)
 	mux.HandleFunc("GET /api/products/{id}/prompt", s.buildPrompt)
+	mux.HandleFunc("GET /api/products/{id}/scenes", s.buildScenes)
+	mux.HandleFunc("GET /api/category-prompts", s.listCategoryPrompts)
+	mux.HandleFunc("POST /api/category-prompts", s.saveCategoryPrompt)
 	mux.HandleFunc("POST /api/products/{id}/generate", s.generate)
 	mux.HandleFunc("POST /api/products/{id}/jobs/{jobId}/regen", s.regenJob)
+	mux.HandleFunc("POST /api/products/{id}/render-videos", s.renderVideos)
 	mux.HandleFunc("GET /api/products/{id}/report", s.getReport)
 	mux.HandleFunc("POST /api/products/{id}/report", s.runReport)
 
@@ -172,6 +176,33 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) listProducts(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.store.List())
+}
+
+// listCategoryPrompts returns every product-review category with its (possibly
+// edited) prompt, for the คลังพรอมต์ page's top-menu library.
+func (s *Server) listCategoryPrompts(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"categories": prompt.CategoryPromptList(s.store.CategoryPromptOverrides()),
+	})
+}
+
+type categoryPromptReq struct {
+	Category string `json:"category"`
+	Prompt   string `json:"prompt"` // empty resets to the built-in default
+}
+
+// saveCategoryPrompt stores an edited prompt for one category (empty = reset).
+func (s *Server) saveCategoryPrompt(w http.ResponseWriter, r *http.Request) {
+	var req categoryPromptReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Category) == "" {
+		writeErr(w, http.StatusBadRequest, "ต้องระบุ category")
+		return
+	}
+	if err := s.store.SetCategoryPrompt(req.Category, strings.TrimSpace(req.Prompt)); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "saved"})
 }
 
 // listBasePresets returns the selectable base-prompt sets (full editable text),
@@ -450,11 +481,58 @@ func (s *Server) buildPrompt(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// buildScenes returns one prompt PER shot (image + video), planned as a connected
+// story exactly like generate. The UI shows these so the user can see (and edit)
+// each scene separately before generating — each shot is a different scene.
+func (s *Server) buildScenes(w http.ResponseWriter, r *http.Request) {
+	p, err := s.store.Get(r.PathValue("id"))
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	pp := *p
+	if f := r.URL.Query().Get("format"); f != "" {
+		pp.Format = f
+	}
+	if a := r.URL.Query().Get("audio"); a != "" {
+		pp.AudioMode = a
+	}
+	shots, _ := strconv.Atoi(r.URL.Query().Get("shots"))
+	if shots < 1 {
+		shots = 1
+	}
+	if shots > 4 {
+		shots = 4
+	}
+	beats := prompt.PlanBeats(pp, shots)
+	scenes := make([]map[string]any, 0, len(beats))
+	for i, beat := range beats {
+		o := prompt.VeoOpts{Line: beat.Line, Role: beat.Role, Part: i + 1, Total: len(beats), Scene: i}
+		img := prompt.BuildVeoImage(pp, o)
+		scenes = append(scenes, map[string]any{
+			"scene":       i,
+			"label":       prompt.SceneLabel(pp.Format, i),
+			"role":        beat.Role,
+			"line":        beat.Line,
+			"imagePrompt": img,
+			"videoPrompt": prompt.BuildVeo(pp, o),
+			"risks":       prompt.ScanRisk(img),
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"scenes": scenes})
+}
+
+type sceneReq struct {
+	ImagePrompt string `json:"imagePrompt"`
+	VideoPrompt string `json:"videoPrompt"`
+}
+
 type generateReq struct {
-	Format          string `json:"format"`
-	Audio           string `json:"audio"`
-	DurationSeconds int    `json:"durationSeconds"` // seconds per shot (Veo clamps to 4..8)
-	Shots           int    `json:"shots"`           // how many clips to generate this batch
+	Format          string     `json:"format"`
+	Audio           string     `json:"audio"`
+	DurationSeconds int        `json:"durationSeconds"` // seconds per shot (Veo clamps to 4..8)
+	Shots           int        `json:"shots"`           // how many clips to generate this batch
+	Scenes          []sceneReq `json:"scenes"`          // optional per-shot prompt overrides (from the UI)
 }
 
 func (s *Server) generate(w http.ResponseWriter, r *http.Request) {
@@ -496,6 +574,9 @@ func (s *Server) generate(w http.ResponseWriter, r *http.Request) {
 		dur = 8
 	}
 	shots := req.Shots
+	if len(req.Scenes) > 0 {
+		shots = len(req.Scenes) // the UI sent one prompt per shot
+	}
 	if shots < 1 {
 		shots = 1
 	}
@@ -503,8 +584,11 @@ func (s *Server) generate(w http.ResponseWriter, r *http.Request) {
 		shots = 4
 	}
 
-	// Pre-video match gate is OFF: generate the image then go straight to video.
-	_, threshold := s.matchCfg()
+	// Pre-video match gate is ON: each shot's generated image must score >= 65 vs
+	// the product photos before its video is rendered. Below that, makeImage refines
+	// the image (fixing the reported problems) up to 3 times, then renders the video.
+	const gateThreshold = 65
+	provider, _ := s.matchCfg()
 	spec := match.SpecText(p)
 
 	// Plan the shots as a connected story (hook → body → close). Each shot gets
@@ -514,17 +598,28 @@ func (s *Server) generate(w http.ResponseWriter, r *http.Request) {
 	reqs := make([]video.Request, 0, len(beats))
 	for i, beat := range beats {
 		o := prompt.VeoOpts{Line: beat.Line, Role: beat.Role, Part: i + 1, Total: len(beats), Scene: i}
+		imgPrompt := prompt.BuildVeoImage(pp, o)
+		vidPrompt := prompt.BuildVeo(pp, o)
+		// Honor per-shot prompts edited in the UI (fall back to the built ones).
+		if i < len(req.Scenes) {
+			if v := strings.TrimSpace(req.Scenes[i].ImagePrompt); v != "" {
+				imgPrompt = req.Scenes[i].ImagePrompt
+			}
+			if v := strings.TrimSpace(req.Scenes[i].VideoPrompt); v != "" {
+				vidPrompt = req.Scenes[i].VideoPrompt
+			}
+		}
 		reqs = append(reqs, video.Request{
 			Format:          pp.Format,
 			AudioMode:       pp.AudioMode,
-			VideoPrompt:     prompt.BuildVeo(pp, o),
-			ImagePrompt:     prompt.BuildVeoImage(pp, o),
+			VideoPrompt:     vidPrompt,
+			ImagePrompt:     imgPrompt,
 			Refs:            refs,
 			FirstFrame:      firstFrame,
 			DurationSeconds: dur,
 			Scene:           i,
-			Checker:         nil, // gate off — no pre-video match check
-			Threshold:       threshold,
+			Checker:         s.analyzer(provider), // gate on: verify image matches product
+			Threshold:       gateThreshold,
 			SpecText:        spec,
 		})
 	}
@@ -577,6 +672,53 @@ func (s *Server) regenJob(w http.ResponseWriter, r *http.Request) {
 		SpecText:        match.SpecText(p),
 	})
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "regenerating"})
+}
+
+type renderVideosReq struct {
+	JobIDs []string `json:"jobIds"` // empty = every eligible image in the library
+}
+
+// renderVideos is the recovery action: for images that already passed the gate but
+// never got a video (Veo quota hit, a crash, a timeout), render the video now from
+// the stored frame + the job's own video prompt. It skips images that already have
+// a video and anything still in progress.
+func (s *Server) renderVideos(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	p, err := s.store.Get(id)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	if !s.geminiConfigured() {
+		writeErr(w, http.StatusBadRequest, "ยังไม่ได้ตั้งค่า Gemini API key (จำเป็นสำหรับ Veo) — ตั้งได้ที่ปุ่ม ⚙️")
+		return
+	}
+	var req renderVideosReq
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	pick := map[string]bool{}
+	for _, jid := range req.JobIDs {
+		pick[jid] = true
+	}
+
+	const libThreshold = 60 // library shows/renders images scoring >= 60
+	started := 0
+	for _, j := range p.Jobs {
+		if j.ImagePath == "" || j.VideoPath != "" {
+			continue // no image, or already has a video
+		}
+		if j.MatchScore < libThreshold {
+			continue // below the library bar
+		}
+		if j.Status == "queued" || j.Status == "running" || j.Status == "image" || j.Status == "checking" {
+			continue // already working on it
+		}
+		if len(pick) > 0 && !pick[j.ID] {
+			continue // a selection was given and this isn't in it
+		}
+		s.curVid().RenderExisting(id, j.ID)
+		started++
+	}
+	writeJSON(w, http.StatusAccepted, map[string]int{"started": started})
 }
 
 func (s *Server) getReport(w http.ResponseWriter, r *http.Request) {

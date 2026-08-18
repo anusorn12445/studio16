@@ -361,28 +361,30 @@ async function analyze(){
 
 function promptPanel(p){
   const el=document.getElementById('panel');
+  sceneCount=0;
   const sc=(p.scripts&&p.scripts[0]&&p.scripts[0].lines)||['','','',''];
   el.innerHTML=
     '<div class="lbl">ขั้น 1 · บทพูด (ไทย)</div>'+
     '<div class="row" style="margin:6px 0 8px"><button class="btn" id="scriptBtn" onclick="makeScript()">🎬 สร้างสคริป (AI คิดบทไทย)</button><span class="muted" style="font-size:12px">คิดบท 4 ประโยค พูดถึงเสื้อผ้าเท่านั้น</span></div>'+
     [0,1,2,3].map(i=>'<input class="inp" id="sc_'+i+'" placeholder="ประโยคที่ '+(i+1)+'" value="'+esc(sc[i]||'')+'" style="margin-bottom:6px">').join('')+
     '<button class="btn" onclick="saveScript()" style="margin:2px 0 18px">บันทึกบท</button>'+
-    '<div class="lbl">ขั้น 2 · พรอมต์</div>'+
+    '<div class="lbl">ขั้น 2 · พรอมต์ (แยกทีละซีน)</div>'+
     '<div class="row" style="margin:6px 0 8px">'+
       '<select id="p_fmt" style="width:auto">'+opt(['mirror','cafe','pair','hyrox'],p.format,['ยืนหน้ากระจก','คาเฟ่','จับคู่สี','กีฬา HYROX'])+'</select>'+
       '<select id="p_audio" style="width:auto">'+opt(['talk','laugh','silent'],p.audioMode,['พูด','หัวเราะ','เงียบ'])+'</select>'+
-      '<button class="btn" onclick="buildPrompt()">สร้างพรอมต์</button>'+
-      '<button class="btn" style="padding:8px 11px;font-size:12px" onclick="copyPrompt()">คัดลอก</button></div>'+
-    '<div id="riskbox"></div>'+
-    '<div class="pre" id="promptbox" style="margin-bottom:18px">— กด สร้างพรอมต์ —</div>'+
+      '<span class="lbl" style="margin-left:6px">จำนวนช็อต</span><input id="p_shots" type="number" min="1" max="4" value="1" style="width:64px" oninput="updTotal()">'+
+      '<button class="btn" onclick="buildScenes()">สร้างพรอมต์รายซีน</button></div>'+
+    '<div class="muted" style="font-size:12px;margin-bottom:8px">แต่ละช็อตได้พรอมต์คนละซีน — แก้ข้อความได้ก่อนกดเจน แต่ละซีนจะถูกสร้างแยกกัน</div>'+
+    '<div id="scenes" style="margin-bottom:18px"><div class="pre">— กด สร้างพรอมต์รายซีน —</div></div>'+
     '<div class="lbl">ขั้น 3 · วิดีโอ</div>'+
     '<div class="row" style="margin-top:6px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px">'+
-      '<span class="lbl">จำนวนช็อต</span><input id="p_shots" type="number" min="1" max="4" value="1" style="width:64px" oninput="updTotal()">'+
-      '<span class="lbl" style="margin-left:6px">วินาที/ช็อต</span><select id="p_dur" style="width:auto" onchange="updTotal()">'+opt([4,6,8],8)+'</select>'+
+      '<span class="lbl">วินาที/ช็อต</span><select id="p_dur" style="width:auto" onchange="updTotal()">'+opt([4,6,8],8)+'</select>'+
       '<span class="muted" id="p_total" style="font-size:12.5px;margin-left:6px"></span>'+
       '<button class="btn o" style="margin-left:auto" onclick="genVideo()">▶ เจนวิดีโอ Veo</button></div>';
   updTotal();
 }
+const ROLE_TH={hook:'ฮุค',story:'เนื้อเรื่อง',close:'ปิดการขาย',body:'เนื้อเรื่อง'};
+let sceneCount=0;
 async function makeScript(){
   const b=document.getElementById('scriptBtn'); b.disabled=true; b.textContent='กำลังคิดบท…';
   try{ const p=await jpost('/api/products/'+cur+'/script',{}); await reloadProducts();
@@ -398,52 +400,89 @@ async function saveScript(){
   catch(e){ toast(e.message,1); }
 }
 function updTotal(){
-  const sh=parseInt((document.getElementById('p_shots')||{}).value,10)||1;
+  const sh=(sceneCount>0)?sceneCount:(parseInt((document.getElementById('p_shots')||{}).value,10)||1);
   const d=parseInt((document.getElementById('p_dur')||{}).value,10)||8;
   const t=document.getElementById('p_total');
   if(t) t.textContent='= รวม '+(sh*d)+' วิ ('+sh+'×'+d+')';
 }
-async function buildPrompt(){
+async function buildScenes(){
   const f=document.getElementById('p_fmt').value, a=document.getElementById('p_audio').value;
-  try{ const d=await api('/api/products/'+cur+'/prompt?format='+f+'&audio='+a);
-    document.getElementById('promptbox').textContent=d.prompt||'';
-    const rb=document.getElementById('riskbox');
-    rb.innerHTML=(d.risks&&d.risks.length)?('<div class="risk">⚠️ คำเสี่ยง: '+d.risks.map(r=>esc(r.found)+' → '+esc(r.good)).join(' · ')+'</div>'):'<div class="risk" style="color:var(--ok)">✓ ไม่พบคำเสี่ยง</div>';
-  }catch(e){ toast(e.message,1); }
+  const shots=Math.max(1,Math.min(4,parseInt(document.getElementById('p_shots').value,10)||1));
+  const box=document.getElementById('scenes');
+  box.innerHTML='<div class="pre">กำลังสร้างพรอมต์รายซีน…</div>';
+  try{
+    const d=await api('/api/products/'+cur+'/scenes?shots='+shots+'&format='+f+'&audio='+a);
+    const list=d.scenes||[];
+    sceneCount=list.length;
+    box.innerHTML=list.map((s,i)=>
+      '<div class="scene-card" style="border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;margin-bottom:10px;background:var(--panel2)">'+
+        '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:6px">'+
+          '<b>ซีน '+(i+1)+(s.label?' · '+esc(s.label):'')+'</b>'+
+          '<span class="row" style="gap:8px;align-items:center"><span class="muted" style="font-size:12px">'+(ROLE_TH[s.role]||esc(s.role||''))+'</span>'+
+          '<button class="btn" style="padding:5px 9px;font-size:11px" onclick="copyText(\'simg_'+i+'\')">คัดลอก</button></span></div>'+
+        (s.line?'<div class="muted" style="font-size:12.5px;margin-bottom:6px">🎙️ '+esc(s.line)+'</div>':'')+
+        '<div class="muted" style="font-size:11.5px;margin-bottom:3px">พรอมต์ภาพ (เฟรมแรก)</div>'+
+        '<textarea id="simg_'+i+'" class="inp" style="height:120px;font-family:monospace;font-size:12px;white-space:pre-wrap">'+esc(s.imagePrompt||'')+'</textarea>'+
+        '<details style="margin-top:6px"><summary class="muted" style="font-size:12px;cursor:pointer">พรอมต์วิดีโอ (Veo)</summary>'+
+          '<textarea id="svid_'+i+'" class="inp" style="height:110px;font-family:monospace;font-size:12px;white-space:pre-wrap;margin-top:4px">'+esc(s.videoPrompt||'')+'</textarea></details>'+
+        ((s.risks&&s.risks.length)?'<div class="risk" style="margin-top:6px">⚠️ คำเสี่ยง: '+s.risks.map(r=>esc(r.found)+' → '+esc(r.good)).join(' · ')+'</div>':'')+
+      '</div>').join('');
+    if(!list.length) box.innerHTML='<div class="pre">— ไม่มีซีน —</div>';
+    updTotal();
+  }catch(e){ box.innerHTML='<div class="pre">— กด สร้างพรอมต์รายซีน —</div>'; toast(e.message,1); }
 }
-function copyPrompt(){const t=document.getElementById('promptbox').textContent;navigator.clipboard.writeText(t).then(()=>toast('คัดลอกแล้ว'),()=>toast('คัดลอกไม่ได้',1));}
+function copyText(id){const el=document.getElementById(id); if(!el)return; navigator.clipboard.writeText(el.value).then(()=>toast('คัดลอกแล้ว'),()=>toast('คัดลอกไม่ได้',1));}
 async function genVideo(){
   const f=document.getElementById('p_fmt').value, a=document.getElementById('p_audio').value;
-  const shots=parseInt(document.getElementById('p_shots').value,10)||1;
   const durationSeconds=parseInt(document.getElementById('p_dur').value,10)||8;
-  try{ await jpost('/api/products/'+cur+'/generate',{format:f,audio:a,shots,durationSeconds}); autoReportPending=true; toast('ส่งงานเจนวิดีโอ '+shots+' ช็อต ('+durationSeconds+' วิ/ช็อต)'); await reloadProducts(); tab='video'; clipView(); }
+  const body={format:f,audio:a,durationSeconds};
+  if(sceneCount>0){
+    const scenes=[];
+    for(let i=0;i<sceneCount;i++){
+      const im=document.getElementById('simg_'+i), vd=document.getElementById('svid_'+i);
+      scenes.push({imagePrompt:(im?im.value:''),videoPrompt:(vd?vd.value:'')});
+    }
+    body.scenes=scenes; body.shots=scenes.length;
+  } else {
+    body.shots=Math.max(1,Math.min(4,parseInt(document.getElementById('p_shots').value,10)||1));
+  }
+  try{ await jpost('/api/products/'+cur+'/generate',body); autoReportPending=true; toast('ส่งงานเจน '+body.shots+' ช็อต (แยกซีน '+durationSeconds+' วิ/ช็อต)'); await reloadProducts(); tab='video'; clipView(); }
   catch(e){ toast(e.message,1); }
 }
 
+function jobNeedsVideo(j){ return !!j.imagePath && !j.videoPath && (j.matchScore||0)>=60 && !jobBusy(j); }
 function videoPanel(p){
   const el=document.getElementById('panel');
   const jobs=(p.jobs||[]);
-  el.innerHTML='<div class="row" style="margin-bottom:12px"><button class="btn o" onclick="tab=\'prompt\';clipView()">▶ เจนวิดีโอใหม่</button></div>'+
-    (jobs.length?jobs.map(j=>jobCard(j)).join(''):'<div class="muted">ยังไม่มีงานวิดีโอ</div>');
+  const bar='<div class="row" style="margin-bottom:12px"><button class="btn o" onclick="tab=\'prompt\';clipView()">▶ เจนวิดีโอใหม่</button></div>';
+  // Show only qualified images: passed >=60, or already a video, or still being
+  // generated. Failed/low-score images are hidden. (The batch "generate video from
+  // qualified images" tool lives in the คลังคลิป page.)
+  const shown=jobs.filter(j=> jobBusy(j) || j.videoPath || (j.imagePath && (j.matchScore||0)>=60));
+  el.innerHTML=bar+(shown.length?shown.map(j=>jobCard(j)).join(''):'<div class="muted">ยังไม่มีรูปที่ผ่านเกณฑ์</div>');
   if(jobs.some(jobBusy)) startPoll();
 }
 function jobCard(j){
   const s=j.status;
+  const needy=jobNeedsVideo(j);
   const bad=(s==='error'||s==='mismatch');
-  const col=s==='done'?'var(--ok)':bad?'var(--bad)':'var(--lilac)';
-  const ic=s==='done'?'✓':bad?'✕':'◴';
+  // A qualified image that just lacks a video is NOT an error — show it as done.
+  let col=s==='done'?'var(--ok)':bad?'var(--bad)':'var(--lilac)';
+  let ic=s==='done'?'✓':bad?'✕':'◴';
   let label={queued:'เข้าคิว',image:'ขั้น 1/2 · สร้างภาพ',checking:'กำลังตรวจสินค้า…',running:'ขั้น 2/2 · เรนเดอร์วิดีโอ…',done:'เสร็จ',error:'ผิดพลาด',mismatch:'สินค้าไม่ตรง'}[s]||s;
   if(s==='image'&&j.attempt) label+=' (ครั้งที่ '+j.attempt+'/3)';
+  if(needy){ col='var(--ok)'; ic='✓'; label='เสร็จ'; }
   const score=(j.matchScore?'<span class="muted" style="font-size:11.5px;margin-left:8px">คะแนนตรง '+j.matchScore+'</span>':'');
   const media=[];
   if(j.imagePath) media.push('<div><div class="lbl" style="margin-bottom:4px">ภาพ</div>'+imageThumb(assetURL(j.imagePath))+'</div>');
   if(s==='done'&&j.videoPath) media.push('<div><div class="lbl" style="margin-bottom:4px">วิดีโอ</div>'+videoThumb(assetURL(j.videoPath))+'</div>');
   const mediaHtml=media.length?'<div class="row" style="gap:10px;margin-top:8px;align-items:flex-start">'+media.join('')+'</div>':'';
-  const err=j.error?('<div class="risk" style="color:#FFC9C9">'+esc(j.error)+'</div>'):'';
-  const regen=(s==='mismatch')?'<button class="btn" style="margin-top:8px;padding:6px 11px;font-size:12px" onclick="regenJob(\''+j.id+'\')">🔄 เจนภาพใหม่ฉากนี้</button>':'';
+  const err=(j.error&&!needy)?('<div class="risk" style="color:#FFC9C9">'+esc(j.error)+'</div>'):'';
+  const notyet=needy?'<div style="color:#FFCC66;font-size:12.5px;margin-top:6px">⏳ ยังไม่ได้เจนวิดีโอ — ไปที่เมนู 🎞️ คลังคลิป เพื่อสั่งเจนวิดีโอ</div>':'';
+  const regen=(s==='mismatch'&&!needy)?'<button class="btn" style="margin-top:8px;padding:6px 11px;font-size:12px" onclick="regenJob(\''+j.id+'\')">🔄 เจนภาพใหม่ฉากนี้</button>':'';
   return '<div style="margin-bottom:12px"><div class="card"><span class="ic" style="background:rgba(255,255,255,.06);color:'+col+'">'+ic+'</span>'+
     '<div style="flex:1"><div style="font-size:13px">'+esc(j.format)+' · '+esc(j.audioMode)+(j.durationSeconds?(' · '+j.durationSeconds+' วิ'):'')+score+'</div><div class="muted" style="font-size:11.5px">'+esc(j.provider||'')+'</div></div>'+
-    '<span style="font-size:12px;color:'+col+'">'+label+'</span></div>'+err+regen+mediaHtml+'</div>';
+    '<span style="font-size:12px;color:'+col+'">'+label+'</span></div>'+err+notyet+regen+mediaHtml+'</div>';
 }
 function jobBusy(j){ return j.status==='queued'||j.status==='image'||j.status==='checking'||j.status==='running'; }
 const HYROX_NAMES=['วอลบอล','เข็นสเลด','battle ropes','farmers carry','sandbag lunge','เบอร์ปี'];
@@ -451,7 +490,7 @@ function sceneName(j){ return (j.format==='hyrox'&&HYROX_NAMES[j.scene]!=null)?H
 function regenJob(jobId){ jpost('/api/products/'+cur+'/jobs/'+jobId+'/regen',{}).then(()=>{ toast('กำลังเจนภาพใหม่'); startPoll(); if(nav==='clip'&&tab==='video') clipView(); updateMismatchPopup(); }).catch(e=>toast(e.message,1)); }
 function updateMismatchPopup(){
   const pop=document.getElementById('mmpop'); if(!pop) return;
-  const prod=getCur(); const bad=prod?(prod.jobs||[]).filter(j=>j.status==='mismatch'):[];
+  const prod=getCur(); const bad=prod?(prod.jobs||[]).filter(j=>j.status==='mismatch'&&!jobNeedsVideo(j)):[];
   if(!bad.length){ pop.style.display='none'; pop.innerHTML=''; return; }
   pop.style.display='block';
   pop.innerHTML='<div style="font-weight:600;margin-bottom:8px;color:#FFC08A">⚠️ สินค้าไม่ตรง '+bad.length+' ฉาก</div>'+
@@ -499,31 +538,51 @@ async function runReport(){
   catch(e){ toast(e.message,1); btn.disabled=false; btn.textContent='ตรวจสินค้าตรง/ไม่ตรง'; }
 }
 
-/* ---------- คลังพรอมต์ ---------- */
-function promptsView(){
-  const p=getCur(); const main=document.getElementById('main');
-  const opts=presets.map(b=>'<option value="'+b.id+'"'+(p&&p.basePresetId===b.id?' selected':'')+'>'+esc(b.name)+'</option>').join('');
-  const bc=(p&&p.baseCustom)||{};
-  main.innerHTML='<div class="h">คลังพรอมต์</div><div class="sub">เลือกชุด Base และปรับพรอมต์ของสินค้าที่เลือก'+(p?(' · '+esc(p.name)):'')+'</div>'+
-    (p?(
-      '<label class="f"><span class="lbl">ชุด Base</span><select id="bp_sel">'+opts+'</select></label>'+
-      '<label class="f"><span class="lbl">ตัวละคร · IDENTITY (เว้นว่าง = ใช้ค่าจากชุด)</span><textarea id="bc_id">'+esc(bc.identity)+'</textarea></label>'+
-      '<label class="f"><span class="lbl">สไตล์ · STYLE</span><textarea id="bc_style" style="min-height:120px">'+esc(bc.style)+'</textarea></label>'+
-      '<label class="f"><span class="lbl">ROLE</span><textarea id="bc_role">'+esc(bc.role)+'</textarea></label>'+
-      '<label class="f"><span class="lbl">MODEL SETTINGS</span><textarea id="bc_model">'+esc(bc.modelSettings)+'</textarea></label>'+
-      '<div class="row"><button class="btn y" onclick="savePrompts()">บันทึก</button><button class="btn" onclick="viewFullPrompt()">ดูพรอมต์เต็ม</button></div>'+
-      '<div class="pre" id="fullprompt" style="margin-top:12px;display:none"></div>'
-    ):'<div class="muted">เลือกสินค้าจากเมนู ทำคลิป ก่อน</div>');
+/* ---------- คลังพรอมต์ (พรอมต์แยกตามหมวดสินค้า) ---------- */
+let catPrompts=null, catGroup=null;
+async function promptsView(){
+  const main=document.getElementById('main');
+  main.innerHTML='<div class="h">คลังพรอมต์</div><div class="sub">พรอมต์รีวิวแยกตามหมวดสินค้า — เลือกหมวดจากเมนูด้านบน</div><div class="muted">กำลังโหลด…</div>';
+  if(!catPrompts){
+    try{ const d=await api('/api/category-prompts'); catPrompts=d.categories||[]; }
+    catch(e){ main.innerHTML='<div class="h">คลังพรอมต์</div><div class="muted">โหลดไม่ได้: '+esc(e.message)+'</div>'; return; }
+  }
+  renderCatPrompts();
 }
-async function savePrompts(){
-  const g=id=>document.getElementById(id).value;
-  const custom={identity:g('bc_id'),style:g('bc_style'),role:g('bc_role'),modelSettings:g('bc_model')};
-  const empty=!custom.identity&&!custom.style&&!custom.role&&!custom.modelSettings;
-  try{ await jpatch('/api/products/'+cur,{basePresetId:document.getElementById('bp_sel').value,baseCustom:empty?null:custom});
-    await reloadProducts(); toast('บันทึกแล้ว'); }catch(e){ toast(e.message,1); }
+function renderCatPrompts(){
+  const main=document.getElementById('main');
+  const groups=[]; catPrompts.forEach(c=>{ if(!groups.includes(c.group)) groups.push(c.group); });
+  if(!catGroup||!groups.includes(catGroup)) catGroup=groups[0];
+  const tabs=groups.map(g=>'<button class="btn'+(g===catGroup?' o':'')+'" style="padding:8px 15px" onclick="setCatGroup(\''+esc(g)+'\')">'+esc(g)+'</button>').join('');
+  const items=catPrompts.filter(c=>c.group===catGroup);
+  const cards=items.map(c=>{
+    const cid='cp_'+c.category.replace(/[^a-zA-Z]/g,'_');
+    return '<div style="margin-bottom:14px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);padding:12px 14px">'+
+      '<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px">'+
+        '<div style="font-size:14px;font-weight:600">'+esc(c.label)+(c.custom?' <span style="font-size:11px;font-weight:400;color:var(--lilac)">· แก้แล้ว</span>':'')+'</div>'+
+        '<span class="muted" style="font-size:11px">'+esc(c.category)+'</span></div>'+
+      '<textarea id="'+cid+'" style="min-height:160px;white-space:pre-wrap;font-size:12.5px">'+esc(c.prompt)+'</textarea>'+
+      '<div class="row" style="margin-top:8px;gap:8px"><button class="btn y" style="padding:7px 14px" onclick="saveCatPrompt(\''+c.category+'\',\''+cid+'\')">บันทึก</button>'+
+        (c.custom?'<button class="btn" style="padding:7px 12px" onclick="resetCatPrompt(\''+c.category+'\')">↺ คืนค่าเริ่มต้น</button>':'')+'</div>'+
+    '</div>';
+  }).join('');
+  main.innerHTML='<div class="h">คลังพรอมต์</div><div class="sub">พรอมต์รีวิวแยกตามหมวดสินค้า — เลือกหมวดจากเมนูด้านบน แก้ได้ทุกหมวด</div>'+
+    '<div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:18px">'+tabs+'</div>'+
+    '<div class="lbl" style="margin-bottom:10px">หมวด '+esc(catGroup)+' ('+items.length+' ประเภท)</div>'+cards;
 }
-async function viewFullPrompt(){
-  try{ const d=await api('/api/products/'+cur+'/prompt'); const box=document.getElementById('fullprompt'); box.style.display='block'; box.textContent=d.prompt||''; }catch(e){ toast(e.message,1); }
+function setCatGroup(g){ catGroup=g; renderCatPrompts(); }
+async function saveCatPrompt(cat,cid){
+  const val=document.getElementById(cid).value;
+  try{ await jpost('/api/category-prompts',{category:cat,prompt:val});
+    const it=catPrompts.find(c=>c.category===cat); if(it){ it.prompt=val; it.custom=(val.trim()!==(it.default||'').trim()); }
+    toast('บันทึกแล้ว'); renderCatPrompts();
+  }catch(e){ toast(e.message,1); }
+}
+async function resetCatPrompt(cat){
+  try{ await jpost('/api/category-prompts',{category:cat,prompt:''});
+    const it=catPrompts.find(c=>c.category===cat); if(it){ it.prompt=it.default; it.custom=false; }
+    toast('คืนค่าเริ่มต้นแล้ว'); renderCatPrompts();
+  }catch(e){ toast(e.message,1); }
 }
 
 /* ---------- ตัวละคร ---------- */
@@ -539,17 +598,65 @@ function clipsView(){
   const main=document.getElementById('main');
   const all=[];
   products.forEach(p=>(p.jobs||[]).forEach(j=>all.push({p,j})));
-  main.innerHTML='<div class="h">คลังคลิป</div><div class="sub">คลิปที่เจนแล้วทั้งหมด</div>'+
-    (all.length?('<div class="grid">'+all.map(({p,j})=>{
-      const done=j.status==='done';
-      const badge=done?'<span class="badge" style="background:rgba(111,216,168,.16);color:var(--ok)">เสร็จ</span>':
-        j.status==='error'?'<span class="badge" style="background:rgba(255,122,122,.16);color:var(--bad)">error</span>':
-        '<span class="badge" style="background:rgba(185,166,232,.16);color:var(--lilac)">'+esc(j.status)+'</span>';
-      const media=(done&&j.videoPath)?videoThumb(assetURL(j.videoPath),'100%'):(j.imagePath?imageThumb(assetURL(j.imagePath),'100%'):'<div class="thumb">'+(done?'▶':'◴')+'</div>');
-      const extra=(done&&j.videoPath&&j.imagePath)?'<div style="margin-top:6px"><span class="lbl">ภาพ</span> '+imageThumb(assetURL(j.imagePath),'52px')+'</div>':'';
-      return '<div class="gcard">'+media+extra+'<div style="font-size:13px;margin-top:8px">'+esc(p.name)+'</div><div class="muted" style="font-size:11.5px;margin:2px 0 8px">'+esc(j.format)+' · '+esc(j.audioMode)+(j.durationSeconds?(' · '+j.durationSeconds+' วิ'):'')+'</div>'+badge+'</div>';
-    }).join('')+'</div>'):'<div class="muted">ยังไม่มีคลิป</div>');
+  const needy=all.filter(({j})=>jobNeedsVideo(j));
+  const anyBusy=products.some(p=>(p.jobs||[]).some(jobBusy));
+  const rest=all.filter(({j})=>(j.status==='done'&&j.videoPath)||jobBusy(j));
+
+  let recov='';
+  if(needy.length){
+    recov='<div style="margin:4px 0 18px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px">'+
+      '<div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'+
+        '<div style="font-size:13.5px">🎬 <b>รูปผ่านเกณฑ์ยังไม่มีวิดีโอ '+needy.length+' รูป</b><div class="muted" style="font-size:11.5px;margin-top:2px">ใช้ตอน Veo ติดลิมิต/ระบบล่ม — เจนวิดีโอจากภาพที่มีอยู่ ด้วยพรอมต์ที่ห้อยไว้กับแต่ละรูป</div></div>'+
+        '<div class="row" style="gap:10px;align-items:center"><label class="muted" style="font-size:12px"><input type="checkbox" id="cselall" checked onchange="toggleAllCsel(this.checked)"> เลือกทั้งหมด</label>'+
+        '<button class="btn o" style="padding:7px 13px;font-size:12.5px" onclick="renderSelectedClips()">▶ เจนวิดีโอที่เลือก</button></div>'+
+      '</div>'+
+      '<div class="grid" style="margin-top:12px">'+needy.map(({p,j})=>clipNeedyCard(p,j)).join('')+'</div>'+
+    '</div>';
+  }
+
+  const grid=rest.length?('<div class="grid">'+rest.map(({p,j})=>clipCard(p,j)).join('')+'</div>'):'<div class="muted">ยังไม่มีคลิปที่เจนแล้ว</div>';
+  main.innerHTML='<div class="h">คลังคลิป</div><div class="sub">เจนวิดีโอจากรูปที่ผ่านเกณฑ์ และดูคลิปที่เจนแล้วทั้งหมด'+(anyBusy?' · กำลังทำงาน…':'')+'</div>'+
+    recov+'<div class="lbl" style="margin:6px 0 8px">คลิปที่เจนแล้ว / กำลังทำ</div>'+grid;
+  if(anyBusy) startClipsPoll();
 }
+function clipCard(p,j){
+  const done=j.status==='done';
+  const badge=done?'<span class="badge" style="background:rgba(111,216,168,.16);color:var(--ok)">เสร็จ</span>':
+    '<span class="badge" style="background:rgba(185,166,232,.16);color:var(--lilac)">'+esc(j.status)+'</span>';
+  const media=(done&&j.videoPath)?videoThumb(assetURL(j.videoPath),'100%'):(j.imagePath?imageThumb(assetURL(j.imagePath),'100%'):'<div class="thumb">'+(done?'▶':'◴')+'</div>');
+  const extra=(done&&j.videoPath&&j.imagePath)?'<div style="margin-top:6px"><span class="lbl">ภาพ</span> '+imageThumb(assetURL(j.imagePath),'52px')+'</div>':'';
+  return '<div class="gcard">'+media+extra+'<div style="font-size:13px;margin-top:8px">'+esc(p.name)+'</div><div class="muted" style="font-size:11.5px;margin:2px 0 8px">'+esc(j.format)+' · '+esc(j.audioMode)+(j.durationSeconds?(' · '+j.durationSeconds+' วิ'):'')+'</div>'+badge+'</div>';
+}
+function clipNeedyCard(p,j){
+  return '<div class="gcard">'+
+    '<label class="row" style="gap:6px;font-size:12px;margin-bottom:6px;cursor:pointer"><input type="checkbox" class="csel" value="'+p.id+'|'+j.id+'" checked> เลือก</label>'+
+    imageThumb(assetURL(j.imagePath),'100%')+
+    '<div style="font-size:13px;margin-top:8px">'+esc(p.name)+'</div>'+
+    '<div class="muted" style="font-size:11.5px;margin:2px 0 6px">'+sceneName(j)+' · คะแนน '+(j.matchScore||0)+'</div>'+
+    '<button class="btn o" style="width:100%;padding:6px;font-size:12px" onclick="renderOneClip(\''+p.id+'\',\''+j.id+'\')">▶ เจนวิดีโอรูปนี้</button>'+
+    (j.prompt?'<details style="margin-top:6px"><summary class="muted" style="font-size:11.5px;cursor:pointer">พรอมต์วิดีโอ (ห้อยไว้)</summary><div class="pre" style="font-size:11px;margin-top:4px;white-space:pre-wrap">'+esc(j.prompt)+'</div></details>':'')+
+  '</div>';
+}
+function toggleAllCsel(on){ document.querySelectorAll('.csel').forEach(b=>{ b.checked=on; }); }
+function renderSelectedClips(){
+  const items=[...document.querySelectorAll('.csel')].filter(b=>b.checked).map(b=>{ const x=b.value.split('|'); return {pid:x[0],jid:x[1]}; });
+  renderVideosFor(items);
+}
+function renderOneClip(pid,jid){ renderVideosFor([{pid,jid}]); }
+async function renderVideosFor(items){
+  if(!items.length){ toast('ยังไม่ได้เลือกรูป',1); return; }
+  const byP={}; items.forEach(it=>{ (byP[it.pid]=byP[it.pid]||[]).push(it.jid); });
+  let total=0;
+  try{
+    for(const pid of Object.keys(byP)){ const r=await jpost('/api/products/'+pid+'/render-videos',{jobIds:byP[pid]}); total+=((r&&r.started!=null)?r.started:byP[pid].length); }
+    toast('ส่งเจนวิดีโอ '+total+' รูป'); await reloadProducts(); if(nav==='clips') clipsView(); startClipsPoll();
+  }catch(e){ toast(e.message,1); }
+}
+function startClipsPoll(){ stopPoll(); pollTimer=setInterval(async()=>{ try{
+  await reloadProducts();
+  if(nav==='clips') clipsView();
+  if(!products.some(p=>(p.jobs||[]).some(jobBusy))) stopPoll();
+}catch(e){} },8000); }
 
 /* ---------- new product / settings ---------- */
 const setmodal=document.getElementById('setmodal');
