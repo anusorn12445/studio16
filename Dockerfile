@@ -21,7 +21,8 @@ COPY --from=build /src/web /app/web
 ENV PORT=8080
 ENV DATA_DIR=/data
 ENV WEB_DIR=/app/web
-VOLUME ["/data"]
+# NOTE: no `VOLUME` here — Railway rejects the Dockerfile VOLUME instruction.
+# For persistent data on Railway attach a Railway Volume mounted at /data instead.
 EXPOSE 8080
 
 CMD ["/app/server"]
