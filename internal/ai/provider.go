@@ -27,6 +27,9 @@ type Analyzer interface {
 	// ScoreMatch compares a candidate image against reference photos and the
 	// written spec, returning a 0-100 match score and any mismatches.
 	ScoreMatch(ctx context.Context, refs []Image, candidate Image, specText string) (MatchResult, error)
+	// ScoreVideo scores a generated video (given as time-ordered frames) for
+	// flicker, distortion, unnatural motion and unrelated characters.
+	ScoreVideo(ctx context.Context, refs []Image, frames []Image, specText string) (MatchResult, error)
 	// GenerateText runs a plain text completion (used for writing the Thai script).
 	GenerateText(ctx context.Context, prompt string) (string, error)
 }

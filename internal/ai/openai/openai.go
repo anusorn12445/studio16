@@ -142,3 +142,21 @@ func (c *Client) ScoreMatch(ctx context.Context, refs []ai.Image, candidate ai.I
 	}
 	return mr, nil
 }
+
+func (c *Client) ScoreVideo(ctx context.Context, refs []ai.Image, frames []ai.Image, specText string) (ai.MatchResult, error) {
+	imgs := append([]ai.Image{}, refs...)
+	imgs = append(imgs, frames...)
+	out, err := c.chat(ctx, imgs, prompt.VideoQualityPrompt(len(refs), len(frames), specText), 1800)
+	if err != nil {
+		return ai.MatchResult{}, err
+	}
+	js, err := prompt.ExtractJSON(out)
+	if err != nil {
+		return ai.MatchResult{}, err
+	}
+	var mr ai.MatchResult
+	if err := json.Unmarshal([]byte(js), &mr); err != nil {
+		return ai.MatchResult{}, fmt.Errorf("openai: bad video json: %w", err)
+	}
+	return mr, nil
+}

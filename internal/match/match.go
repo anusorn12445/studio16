@@ -6,9 +6,11 @@ package match
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,6 +18,38 @@ import (
 	"studio16/internal/model"
 	"studio16/internal/store"
 )
+
+func errStr(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
+// extractFramesN samples n stills evenly across a clip for the video QC pass.
+func (s *Scorer) extractFramesN(videoRel string, n, durationSec int) ([]ai.Image, error) {
+	if durationSec <= 0 {
+		durationSec = 8
+	}
+	var frames []ai.Image
+	for i := 0; i < n; i++ {
+		t := float64(durationSec) * (float64(i) + 0.5) / float64(n)
+		out := filepath.Join(os.TempDir(), fmt.Sprintf("s16rep_%d_%d.jpg", time.Now().UnixNano()%1e9, i))
+		if err := exec.Command(s.ffmpeg, "-y", "-ss", strconv.FormatFloat(t, 'f', 2, 64),
+			"-i", s.store.AbsPath(videoRel), "-frames:v", "1", "-q:v", "3", out).Run(); err != nil {
+			continue
+		}
+		b, err := os.ReadFile(out)
+		_ = os.Remove(out)
+		if err == nil && len(b) > 0 {
+			frames = append(frames, ai.Image{Mime: "image/jpeg", Data: b})
+		}
+	}
+	if len(frames) == 0 {
+		return nil, fmt.Errorf("no frames extracted")
+	}
+	return frames, nil
+}
 
 type Scorer struct {
 	analyzer  ai.Analyzer
@@ -216,5 +250,6 @@ func (s *Scorer) tally(r *model.Report, item model.MatchItem) {
 	} else {
 		r.FailCount++
 	}
+	log.Printf("[report] %s ref=%s score=%d pass=%v verdict=%q", item.Kind, item.RefID, item.Score, item.Pass, item.Verdict)
 	r.Items = append(r.Items, item)
 }

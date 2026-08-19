@@ -88,7 +88,7 @@ func (s *Server) saveSettings() error {
 func (s *Server) rebuild() {
 	s.openai = openai.New(s.settings.OpenAIKey, s.settings.OpenAIModel)
 	s.gemini = gemini.New(s.settings.GeminiKey, s.settings.GeminiVisionModel, s.settings.GeminiImageModel, s.settings.VeoModel)
-	s.vid = video.NewManager(s.gemini, s.store)
+	s.vid = video.NewManager(s.gemini, s.store, s.cfg.FFmpegPath)
 }
 
 // getSettings returns non-secret settings plus whether each key is configured.

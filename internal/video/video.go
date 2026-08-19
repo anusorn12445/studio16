@@ -4,12 +4,20 @@ package video
 
 import (
 	"context"
+	"fmt"
+	"log"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"studio16/internal/ai"
 	"studio16/internal/model"
+	"studio16/internal/prompt"
 	"studio16/internal/store"
 )
 
@@ -22,15 +30,19 @@ type Generator interface {
 }
 
 type Manager struct {
-	gen   Generator
-	store *store.Store
+	gen    Generator
+	store  *store.Store
+	ffmpeg string // ffmpeg binary path (for auto-merging a finished sequence)
 
 	pollEvery time.Duration
 	timeout   time.Duration
+
+	mergeMu  sync.Mutex
+	merging  map[string]bool // productID_batch currently being merged (prevents double work)
 }
 
-func NewManager(gen Generator, st *store.Store) *Manager {
-	return &Manager{gen: gen, store: st, pollEvery: 10 * time.Second, timeout: 15 * time.Minute}
+func NewManager(gen Generator, st *store.Store, ffmpeg string) *Manager {
+	return &Manager{gen: gen, store: st, ffmpeg: ffmpeg, pollEvery: 10 * time.Second, timeout: 15 * time.Minute, merging: map[string]bool{}}
 }
 
 // Request bundles everything one shot needs, including the optional image
@@ -177,7 +189,7 @@ func (m *Manager) run(productID, jobID string, req Request) *ai.Image {
 // RenderExisting renders the video for a job that already has an accepted image,
 // using the video prompt stored on the job. Used by the library's batch/single
 // "generate video" action so images and videos are decoupled.
-func (m *Manager) RenderExisting(productID, jobID string) {
+func (m *Manager) RenderExisting(productID, jobID string, checker ai.Analyzer, refs []ai.Image, spec string, threshold int) {
 	p, err := m.store.Get(productID)
 	if err != nil {
 		return
@@ -200,7 +212,15 @@ func (m *Manager) RenderExisting(productID, jobID string) {
 		return
 	}
 	frame := &ai.Image{Mime: "image/jpeg", Data: data}
-	req := Request{VideoPrompt: job.Prompt, DurationSeconds: job.DurationSeconds}
+	req := Request{
+		VideoPrompt:     job.Prompt,
+		DurationSeconds: job.DurationSeconds,
+		Scene:           job.Scene,
+		Checker:         checker, // enables video QC + fix-and-retry
+		Refs:            refs,
+		SpecText:        spec,
+		Threshold:       threshold,
+	}
 	m.setJob(productID, jobID, func(j *model.Job) { j.Status = "queued"; j.Error = "" })
 	go m.renderVideo(productID, jobID, req, frame)
 }
@@ -293,52 +313,284 @@ func (m *Manager) makeImage(productID, jobID string, req Request) (*ai.Image, bo
 	return frame, true
 }
 
-// renderVideo animates the frame into video with Veo and polls to completion.
+// renderVideo renders the clip with Veo and — when a quality checker is set —
+// scores the finished video (flicker / distortion / unnatural motion / stray
+// people). If it scores below the threshold it re-renders, appending the exact
+// defects to the prompt so Veo fixes them rather than starting from scratch, up to
+// 3 attempts. Every step is logged.
 func (m *Manager) renderVideo(productID, jobID string, req Request, frame *ai.Image) {
+	gate := false // video QC + auto-regeneration removed by request — render once
+	maxAtt := 1
+	if gate {
+		maxAtt = 3
+	}
+	vp := req.VideoPrompt
+	for attempt := 1; attempt <= maxAtt; attempt++ {
+		m.setJob(productID, jobID, func(j *model.Job) { j.VideoAttempt = attempt })
+		data, err := m.renderOnce(productID, jobID, req, frame, vp)
+		if err != nil {
+			log.Printf("[video] product=%s job=%s attempt=%d render error: %v", productID, jobID, attempt, err)
+			m.setJob(productID, jobID, func(j *model.Job) { j.Status = "error"; j.Error = err.Error() })
+			return
+		}
+		path, err := m.store.SaveAsset(productID, jobID+".mp4", data)
+		if err != nil {
+			m.setJob(productID, jobID, func(j *model.Job) { j.Status = "error"; j.Error = err.Error() })
+			return
+		}
+		m.setJob(productID, jobID, func(j *model.Job) { j.VideoPath = path })
+
+		if !gate {
+			m.setJob(productID, jobID, func(j *model.Job) { j.Status = "done" })
+			log.Printf("[video] product=%s job=%s scene=%d done (no QC)", productID, jobID, req.Scene)
+			go m.afterVideoDone(productID, jobID)
+			return
+		}
+
+		// Score the finished video.
+		m.setJob(productID, jobID, func(j *model.Job) { j.Status = "vcheck" })
+		sctx, scancel := context.WithTimeout(context.Background(), 3*time.Minute)
+		frames, ferr := m.extractVideoFrames(m.store.AbsPath(path), 5, req.DurationSeconds, jobID)
+		if ferr != nil || len(frames) == 0 {
+			scancel()
+			log.Printf("[video] product=%s job=%s frame-extract failed (%v) — accepting video", productID, jobID, ferr)
+			m.setJob(productID, jobID, func(j *model.Job) { j.Status = "done" })
+			go m.afterVideoDone(productID, jobID)
+			return
+		}
+		mr, serr := req.Checker.ScoreVideo(sctx, req.Refs, frames, req.SpecText)
+		scancel()
+		if serr != nil {
+			log.Printf("[video] product=%s job=%s QC error: %v — accepting video", productID, jobID, serr)
+			m.setJob(productID, jobID, func(j *model.Job) { j.Status = "done" })
+			go m.afterVideoDone(productID, jobID)
+			return
+		}
+		issues := append([]string{}, mr.Mismatches...)
+		issues = append(issues, mr.Issues...)
+		m.setJob(productID, jobID, func(j *model.Job) { j.VideoScore = mr.Score; j.VideoIssues = issues })
+		log.Printf("[video] QC product=%s job=%s scene=%d attempt=%d score=%d verdict=%q issues=%v",
+			productID, jobID, req.Scene, attempt, mr.Score, mr.Verdict, issues)
+
+		if mr.Score >= req.Threshold {
+			m.setJob(productID, jobID, func(j *model.Job) { j.Status = "done" })
+			log.Printf("[video] product=%s job=%s scene=%d PASSED video QC (%d>=%d)", productID, jobID, req.Scene, mr.Score, req.Threshold)
+			go m.afterVideoDone(productID, jobID)
+			return
+		}
+		if attempt < maxAtt {
+			vp = req.VideoPrompt + prompt.VideoFixNote(issues)
+			log.Printf("[video] product=%s job=%s scene=%d video QC %d<%d — re-rendering to fix: %v",
+				productID, jobID, req.Scene, mr.Score, req.Threshold, issues)
+		}
+	}
+	// Ran out of attempts and still below the bar — keep the best video we produced
+	// (a low-scored clip is still more useful than none) with its score recorded.
+	m.setJob(productID, jobID, func(j *model.Job) { j.Status = "done" })
+	log.Printf("[video] product=%s job=%s scene=%d kept after %d attempts (still below QC threshold)", productID, jobID, req.Scene, maxAtt)
+	go m.afterVideoDone(productID, jobID)
+}
+
+// renderOnce does a single Veo render (start → poll → download) and returns the
+// video bytes.
+func (m *Manager) renderOnce(productID, jobID string, req Request, frame *ai.Image, videoPrompt string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), m.timeout)
 	defer cancel()
-
-	opName, err := m.gen.StartVideo(ctx, req.VideoPrompt, frame, req.DurationSeconds)
+	opName, err := m.gen.StartVideo(ctx, videoPrompt, frame, req.DurationSeconds)
 	if err != nil {
-		m.setJob(productID, jobID, func(j *model.Job) { j.Status = "error"; j.Error = err.Error() })
-		return
+		return nil, err
 	}
 	m.setJob(productID, jobID, func(j *model.Job) { j.Status = "running"; j.OpName = opName })
-
 	ticker := time.NewTicker(m.pollEvery)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			m.setJob(productID, jobID, func(j *model.Job) { j.Status = "error"; j.Error = "timed out" })
-			return
+			return nil, fmt.Errorf("timed out")
 		case <-ticker.C:
 			st, err := m.gen.PollVideo(ctx, opName)
 			if err != nil {
-				continue // transient; keep polling until timeout
+				continue
 			}
 			if !st.Done {
 				continue
 			}
 			if st.Error != "" {
-				m.setJob(productID, jobID, func(j *model.Job) { j.Status = "error"; j.Error = st.Error })
-				return
+				return nil, fmt.Errorf("%s", st.Error)
 			}
 			data := st.Inline
 			if len(data) == 0 && st.VideoURL != "" {
 				data, err = m.gen.DownloadVideo(ctx, st.VideoURL)
 				if err != nil {
-					m.setJob(productID, jobID, func(j *model.Job) { j.Status = "error"; j.Error = err.Error() })
-					return
+					return nil, err
 				}
 			}
-			path, err := m.store.SaveAsset(productID, jobID+".mp4", data)
-			if err != nil {
-				m.setJob(productID, jobID, func(j *model.Job) { j.Status = "error"; j.Error = err.Error() })
-				return
-			}
-			m.setJob(productID, jobID, func(j *model.Job) { j.Status = "done"; j.VideoPath = path })
-			return
+			return data, nil
 		}
 	}
+}
+
+// extractVideoFrames pulls n stills evenly spaced across the clip for the QC pass.
+func (m *Manager) extractVideoFrames(videoAbs string, n, durationSec int, prefix string) ([]ai.Image, error) {
+	if durationSec <= 0 {
+		durationSec = 8
+	}
+	var frames []ai.Image
+	for i := 0; i < n; i++ {
+		t := float64(durationSec) * (float64(i) + 0.5) / float64(n)
+		out := filepath.Join(os.TempDir(), fmt.Sprintf("s16vf_%s_%d.jpg", prefix, i))
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		err := exec.CommandContext(ctx, m.ffmpeg, "-y", "-ss", strconv.FormatFloat(t, 'f', 2, 64),
+			"-i", videoAbs, "-frames:v", "1", "-q:v", "3", out).Run()
+		cancel()
+		if err != nil {
+			continue
+		}
+		b, err := os.ReadFile(out)
+		_ = os.Remove(out)
+		if err == nil && len(b) > 0 {
+			frames = append(frames, ai.Image{Mime: "image/jpeg", Data: b})
+		}
+	}
+	if len(frames) == 0 {
+		return nil, fmt.Errorf("no frames extracted")
+	}
+	return frames, nil
+}
+
+// afterVideoDone auto-merges a sequence: when a shot finishes and no other shot in
+// the same batch is still working, it concatenates the finished shots into one clip
+// (only if there are >= 2 and it wasn't merged before).
+func (m *Manager) afterVideoDone(productID, jobID string) {
+	if m.ffmpeg == "" {
+		return
+	}
+	p, err := m.store.Get(productID)
+	if err != nil {
+		return
+	}
+	var createdAt int64
+	found := false
+	for _, j := range p.Jobs {
+		if j.ID == jobID {
+			createdAt = j.CreatedAt
+			found = true
+			break
+		}
+	}
+	if !found {
+		return
+	}
+	key := strconv.FormatInt(createdAt, 10)
+	busy, doneVids := 0, 0
+	for _, j := range p.Jobs {
+		if j.CreatedAt != createdAt {
+			continue
+		}
+		switch j.Status {
+		case "queued", "image", "checking", "running":
+			busy++
+		case "done":
+			if j.VideoPath != "" {
+				doneVids++
+			}
+		}
+	}
+	if busy > 0 || doneVids < 2 {
+		return // still rendering, or nothing to merge
+	}
+	if p.MergedVideos != nil && p.MergedVideos[key] != "" {
+		return // already merged this sequence
+	}
+	mkey := productID + "_" + key
+	m.mergeMu.Lock()
+	if m.merging[mkey] {
+		m.mergeMu.Unlock()
+		return
+	}
+	m.merging[mkey] = true
+	m.mergeMu.Unlock()
+	defer func() { m.mergeMu.Lock(); delete(m.merging, mkey); m.mergeMu.Unlock() }()
+	_, _ = m.MergeBatch(productID, createdAt)
+}
+
+// MergeBatch concatenates every finished shot of one sequence (batch, keyed by
+// createdAt) into a single video with ffmpeg, ordered by scene, and stores it on
+// the product under that batch key.
+func (m *Manager) MergeBatch(productID string, createdAt int64) (string, error) {
+	p, err := m.store.Get(productID)
+	if err != nil {
+		return "", err
+	}
+	var jobs []model.Job
+	for _, j := range p.Jobs {
+		if j.CreatedAt == createdAt && j.Status == "done" && j.VideoPath != "" {
+			jobs = append(jobs, j)
+		}
+	}
+	if len(jobs) < 2 {
+		return "", fmt.Errorf("ต้องมีวิดีโอที่เสร็จอย่างน้อย 2 ช็อตในชุดนี้ถึงจะรวมได้")
+	}
+	sort.Slice(jobs, func(a, b int) bool { return jobs[a].Scene < jobs[b].Scene })
+
+	withAudio := jobs[0].AudioMode != "silent"
+	audioFlag := 0
+	if withAudio {
+		audioFlag = 1
+	}
+	args := []string{"-y"}
+	var pads strings.Builder
+	for i, j := range jobs {
+		args = append(args, "-i", m.store.AbsPath(j.VideoPath))
+		pads.WriteString(fmt.Sprintf("[%d:v:0]", i))
+		if withAudio {
+			pads.WriteString(fmt.Sprintf("[%d:a:0]", i))
+		}
+	}
+	filter := pads.String() + fmt.Sprintf("concat=n=%d:v=1:a=%d", len(jobs), audioFlag)
+	if withAudio {
+		filter += "[v][a]"
+	} else {
+		filter += "[v]"
+	}
+	args = append(args, "-filter_complex", filter, "-map", "[v]")
+	if withAudio {
+		args = append(args, "-map", "[a]", "-c:a", "aac")
+	}
+	args = append(args, "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-movflags", "+faststart")
+
+	key := strconv.FormatInt(createdAt, 10)
+	tmp := filepath.Join(os.TempDir(), "s16merge_"+productID+"_"+key+".mp4")
+	args = append(args, tmp)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	if out, err := exec.CommandContext(ctx, m.ffmpeg, args...).CombinedOutput(); err != nil {
+		return "", fmt.Errorf("ffmpeg: %s", ffmpegTail(out))
+	}
+	data, err := os.ReadFile(tmp)
+	_ = os.Remove(tmp)
+	if err != nil {
+		return "", err
+	}
+	path, err := m.store.SaveAsset(productID, "merged_"+key+".mp4", data)
+	if err != nil {
+		return "", err
+	}
+	_, _ = m.store.Update(productID, func(pp *model.Product) error {
+		if pp.MergedVideos == nil {
+			pp.MergedVideos = map[string]string{}
+		}
+		pp.MergedVideos[key] = path
+		return nil
+	})
+	return path, nil
+}
+
+// ffmpegTail returns the last line of ffmpeg output (its actual error message).
+func ffmpegTail(out []byte) string {
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	if len(lines) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(lines[len(lines)-1])
 }

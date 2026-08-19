@@ -94,6 +94,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/products/{id}/generate", s.generate)
 	mux.HandleFunc("POST /api/products/{id}/jobs/{jobId}/regen", s.regenJob)
 	mux.HandleFunc("POST /api/products/{id}/render-videos", s.renderVideos)
+	mux.HandleFunc("POST /api/products/{id}/merge", s.mergeBatch)
 	mux.HandleFunc("GET /api/products/{id}/report", s.getReport)
 	mux.HandleFunc("POST /api/products/{id}/report", s.runReport)
 
@@ -701,6 +702,10 @@ func (s *Server) renderVideos(w http.ResponseWriter, r *http.Request) {
 	}
 
 	const libThreshold = 60 // library shows/renders images scoring >= 60
+	const videoGate = 65    // video QC threshold
+	provider, _ := s.matchCfg()
+	refs, _ := s.loadImages(p, 3)
+	spec := match.SpecText(p)
 	started := 0
 	for _, j := range p.Jobs {
 		if j.ImagePath == "" || j.VideoPath != "" {
@@ -709,16 +714,43 @@ func (s *Server) renderVideos(w http.ResponseWriter, r *http.Request) {
 		if j.MatchScore < libThreshold {
 			continue // below the library bar
 		}
-		if j.Status == "queued" || j.Status == "running" || j.Status == "image" || j.Status == "checking" {
+		if j.Status == "queued" || j.Status == "running" || j.Status == "image" || j.Status == "checking" || j.Status == "vcheck" {
 			continue // already working on it
 		}
 		if len(pick) > 0 && !pick[j.ID] {
 			continue // a selection was given and this isn't in it
 		}
-		s.curVid().RenderExisting(id, j.ID)
+		s.curVid().RenderExisting(id, j.ID, s.analyzer(provider), refs, spec, videoGate)
 		started++
 	}
 	writeJSON(w, http.StatusAccepted, map[string]int{"started": started})
+}
+
+type mergeReq struct {
+	Batch string `json:"batch"` // the createdAt key that identifies the sequence
+}
+
+// mergeBatch is the manual "รวมใหม่" action; it concatenates a sequence's finished
+// shots into one clip via the video manager (the same routine used for auto-merge).
+func (s *Server) mergeBatch(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if _, err := s.store.Get(id); err != nil {
+		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	var req mergeReq
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	createdAt, err := strconv.ParseInt(strings.TrimSpace(req.Batch), 10, 64)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "batch ไม่ถูกต้อง")
+		return
+	}
+	path, err := s.curVid().MergeBatch(id, createdAt)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "รวมวิดีโอไม่สำเร็จ: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"path": path})
 }
 
 func (s *Server) getReport(w http.ResponseWriter, r *http.Request) {

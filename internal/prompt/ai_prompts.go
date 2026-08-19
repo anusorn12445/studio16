@@ -128,3 +128,43 @@ func MatchPrompt(numRefs int, specText string) string {
 	b.WriteString(`{"score": <0-100 integer>, "verdict": "<short Thai phrase, <=10 words>", "mismatches": [<short Thai phrases, or empty>], "issues": [<short Thai phrases, or empty>]}`)
 	return b.String()
 }
+
+// VideoQualityPrompt scores a generated review VIDEO (given as time-ordered frames)
+// on four failure modes: product flicker, distortion/artifacts, unnatural motion and
+// unrelated characters appearing.
+func VideoQualityPrompt(numRefs, numFrames int, specText string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "You are a strict QC inspector for AI-generated product-review videos.\n\n")
+	fmt.Fprintf(&b, "The FIRST %d image(s) are the REAL product reference photos. The remaining %d image(s) are FRAMES sampled in TIME ORDER from ONE generated video. Judge the VIDEO by how the frames change over time.\n\n", numRefs, numFrames)
+	if strings.TrimSpace(specText) != "" {
+		b.WriteString("The product in the video should stay the same as this spec:\n---\n")
+		b.WriteString(specText)
+		b.WriteString("\n---\n\n")
+	}
+	b.WriteString("Score 0-100 based ONLY on these four problems (more/worse problems = lower score):\n")
+	b.WriteString("1) PRODUCT FLICKER — does the garment (logo, colour, cut, length, print) flicker, change, morph, or appear/disappear between frames? It must stay identical throughout.\n")
+	b.WriteString("2) DISTORTION / ARTIFACTS — warped or melting body, extra/missing limbs, broken hands or fingers, twisted face, garbled text.\n")
+	b.WriteString("3) UNNATURAL MOTION — impossible, jittery, teleporting or physically wrong movement between frames.\n")
+	b.WriteString("4) UNRELATED CHARACTERS — any extra person or character that appears and should not be there.\n\n")
+	b.WriteString("A clean, stable, natural video with a consistent product = 85-100. Small issues = 65-84. Obvious flicker, distortion, unnatural motion, or extra people = below 65 (FAIL).\n\n")
+	b.WriteString("Put the failing CRITERIA (short Thai) in \"mismatches\" and the specific visible DEFECTS (short Thai) in \"issues\". Keep every string SHORT. Reply with ONLY this JSON, no prose, no markdown:\n")
+	b.WriteString(`{"score": <0-100 integer>, "verdict": "<short Thai phrase, <=10 words>", "mismatches": [<short Thai phrases, or empty>], "issues": [<short Thai phrases, or empty>]}`)
+	return b.String()
+}
+
+// VideoFixNote is appended to a video prompt on a retry so Veo corrects the exact
+// defects the QC found, instead of regenerating from scratch.
+func VideoFixNote(problems []string) string {
+	var clean []string
+	for _, p := range problems {
+		if strings.TrimSpace(p) != "" {
+			clean = append(clean, strings.TrimSpace(p))
+		}
+	}
+	base := "\n\nFIX THE VIDEO PROBLEMS from the previous attempt — keep the SAME product, scene, outfit and person; change ONLY what is needed to remove these problems"
+	if len(clean) > 0 {
+		base += ": " + strings.Join(clean, "; ")
+	}
+	base += ". The garment must stay identical and perfectly stable with NO flicker or morphing; all movement must look natural and physically correct; no distortion, no warped hands/face, and absolutely no extra people in the shot."
+	return base
+}

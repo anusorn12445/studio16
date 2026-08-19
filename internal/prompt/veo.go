@@ -8,6 +8,14 @@ import (
 	"studio16/internal/model"
 )
 
+// physicsGuard is appended to EVERY video prompt (all formats) to stop the model
+// from producing jumbled poses, a flickering/morphing environment, clipping, or
+// physically impossible motion.
+const physicsGuard = "PHYSICS: every pose and motion stays anatomically correct and physically possible — no contorted or impossible poses, no broken/backward joints, no extra or missing limbs, hands with five fingers. The background stays solid and stable — it never flickers, morphs or changes. Nothing clips or passes through anything else; feet stay planted on the ground — no floating, sliding or teleporting."
+
+// physicsGuardImage is the still-image version of the same guard.
+const physicsGuardImage = "PHYSICS: a natural, anatomically-correct, physically-possible pose — no contorted posture, no broken joints, no extra/missing limbs, five normal fingers; a solid coherent environment with correct perspective; nothing clips through anything and feet rest naturally on the ground with proper contact."
+
 // BuildVeo produces a COMPACT single-video prompt for a direct Veo API call.
 //
 // The full Build() output is an agent pipeline prompt (2 images + 2 videos,
@@ -41,11 +49,14 @@ func BuildVeo(p model.Product, o VeoOpts) string {
 		}
 	}
 	timing := T(strings.Join(F.T1, " "))
-	if p.Format == "hyrox" {
-		timing = hyroxSceneAt(o.Scene).action // each shot = a different HYROX exercise
-		// HYROX styles the top with proper athletic wear, never jeans/casual trousers.
-		bottom = "high-waisted black athletic training leggings"
-		shoes = " supportive training shoes on her feet."
+	if isSportFormat(p.Format) {
+		timing = sportSceneAt(p.Format, o.Scene).action // each shot = a different athletic scene
+		// Sport formats style the top with proper activewear, never jeans/casual trousers.
+		bottom = "high-waisted black athletic leggings"
+		shoes = " supportive running shoes on her feet."
+		if p.Format == "hyrox" {
+			shoes = " supportive training shoes on her feet."
+		}
 	}
 
 	// Give Veo an actual Thai line to speak (from the product script, else a
@@ -102,18 +113,19 @@ func BuildVeo(p model.Product, o VeoOpts) string {
 	}
 	settingText := F.Setting
 	camLine := "CAMERA: phone locked on a tripod, fixed 9:16 framing, eye/chest level. No drift, no dolly, no zoom; she stays the same size in frame; the background stays static.\n\n"
-	if p.Format == "hyrox" {
-		s := hyroxSceneAt(o.Scene)
+	if isSportFormat(p.Format) {
+		s := sportSceneAt(p.Format, o.Scene)
 		settingText = s.setting
-		camLine = "CAMERA: locked framing, " + s.camera + ". No drift, no dolly, no zoom; she stays the same size in frame; the background stays static.\n\n"
+		camLine = "CAMERA: " + s.camera + ", steady and clean; she stays a consistent size in frame; the background stays static.\n\n"
 	}
 	fmt.Fprintf(&b, "SETTING: %s\n\n", trimRunes(settingText, 200))
 	b.WriteString(camLine)
 	fmt.Fprintf(&b, "ACTION: %s\n\n", trimRunes(timing, 300))
 	b.WriteString(consist)
+	b.WriteString(physicsGuard + "\n\n")
 	b.WriteString("Avoid: black bars, letterboxing, borders or padding, any English speech, camera drift or zoom, changing the garment, exposed waist, extra people, on-screen text or logos, distorted hands, robotic motion.")
 
-	return trimRunes(b.String(), 1850)
+	return trimRunes(b.String(), 2100)
 }
 
 // BuildVeoImage produces a COMPACT image prompt for the opening frame: the
@@ -130,9 +142,12 @@ func BuildVeoImage(p model.Product, o VeoOpts) string {
 	if F.Feet {
 		shoes = " " + Sanitize(EnOnly(p.Shoes, "plain white sneakers")) + " on her feet."
 	}
-	if p.Format == "hyrox" {
-		bottom = "high-waisted black athletic training leggings"
-		shoes = " supportive training shoes on her feet."
+	if isSportFormat(p.Format) {
+		bottom = "high-waisted black athletic leggings"
+		shoes = " supportive running shoes on her feet."
+		if p.Format == "hyrox" {
+			shoes = " supportive training shoes on her feet."
+		}
 	}
 	idBrief := firstSentence(base.Identity)
 	styleBrief := firstSentence(base.Style)
@@ -151,13 +166,17 @@ func BuildVeoImage(p model.Product, o VeoOpts) string {
 	settingText := F.Setting
 	opening := fmt.Sprintf("A full-frame vertical 9:16 portrait photo that fills the entire frame edge to edge — no black bars, no letterboxing, no borders, no padding. %s %s, with %s.%s", idBrief, wearLine, bottom, shoes)
 	garmentNote := " Use the attached photo for the GARMENT only, not for any person in it — the woman is the one described above."
-	if p.Format == "hyrox" {
-		s := hyroxSceneAt(o.Scene)
+	if isSportFormat(p.Format) {
+		s := sportSceneAt(p.Format, o.Scene)
 		settingText = s.setting
-		pose = "POSE — she is " + s.pose + ", mid-workout, athletic and focused. CAMERA: " + s.camera + "."
-		// Lead with the EXERCISE + equipment + shot number so the model treats
-		// each scene as a distinct photograph instead of collapsing to one pose.
-		opening = "A full-frame vertical 9:16 ACTION photo — this is SHOT #" + strconv.Itoa(o.Scene+1) + " of a HYROX review series, and it MUST look completely different from the other shots: a different station, a different exercise, different equipment and a different camera angle. It shows a Thai woman mid-" + s.name + ", clearly using the " + s.name + " equipment — this exercise and its equipment are the main subject and must fill the frame. " + idBrief + " " + wearLine + ", with " + bottom + "." + shoes
+		pose = "POSE — she is " + s.pose + ", athletic and focused, in genuine effort. CAMERA: " + s.camera + "."
+		// Lead with the scene + shot number so the model treats each scene as a
+		// distinct photograph instead of collapsing to one pose.
+		series, subject := "HYROX", "mid-"+s.name+", clearly using the "+s.name+" equipment — this exercise and its equipment are the main subject"
+		if p.Format == "run" {
+			series, subject = "RUNNING", "mid-"+s.name+" — this running scene and her running form are the main subject"
+		}
+		opening = "A full-frame vertical 9:16 ACTION photo — this is SHOT #" + strconv.Itoa(o.Scene+1) + " of a " + series + " review series, and it MUST look completely different from the other shots: a different setting, a different scene and a different camera angle. It shows a Thai woman " + subject + " and must fill the frame. " + idBrief + " " + wearLine + ", with " + bottom + "." + shoes
 		garmentNote = " The attached photo shows ONLY the shirt's design, print and colour — copy the shirt's graphic exactly, but do NOT copy its pose, background, cropping or composition; dress the athlete in this new action scene."
 	}
 
@@ -166,9 +185,10 @@ func BuildVeoImage(p model.Product, o VeoOpts) string {
 	fmt.Fprintf(&b, "%s\n\n", trimRunes(styleBrief, 200))
 	fmt.Fprintf(&b, "SETTING: %s\n\n", trimRunes(settingText, 300))
 	fmt.Fprintf(&b, "%s\n\n", trimRunes(pose, 360))
+	b.WriteString(physicsGuardImage + " ")
 	b.WriteString(authLine + garmentNote + " Full-bleed 9:16 portrait, no black bars or borders, no on-screen caption or watermark overlay (but keep the shirt's own printed graphic/logo exactly).")
 
-	return trimRunes(b.String(), 1700)
+	return trimRunes(b.String(), 2000)
 }
 
 // firstSentence returns text up to (and including) the first sentence-ending period.
@@ -247,11 +267,76 @@ func hyroxSceneAt(i int) hyroxScene {
 	return hyroxScenes[((i%n)+n)%n]
 }
 
+// runScenes are the running-review shots — each a different running scene so every
+// shot looks distinct (jog, sprint, hill, treadmill, trail, cool-down).
+var runScenes = []hyroxScene{
+	{
+		name:    "warm-up jog",
+		pose:    "jogging at an easy pace, arms relaxed and swinging, one foot mid-stride, warming up",
+		action:  "She jogs at an easy warm-up pace toward the camera, relaxed and smiling, talking between breaths. The top stays put and no skin shows at the waist.",
+		setting: "On an outdoor rubber running track at a stadium: red-brown track with white lane lines curving away, low empty stands and floodlight towers softly blurred behind, soft morning light.",
+		camera:  "a front three-quarter angle as she jogs toward the camera, framed full length",
+	},
+	{
+		name:    "sprint",
+		pose:    "in a powerful full sprint, driving one knee high and pumping her arms, leaning forward with speed",
+		action:  "She sprints hard down the straight, driving her knees and pumping her arms, then eases off and talks to camera, breathing. The activewear holds under speed.",
+		setting: "On the straight of an outdoor running track, crisp white lane lines running straight away into the distance, blurred stadium behind.",
+		camera:  "a side tracking angle level with her as she sprints, full length",
+	},
+	{
+		name:    "uphill run",
+		pose:    "running up a steep grassy slope, leaning into the incline, driving hard with her legs",
+		action:  "She runs up a steep hill, leaning into the climb and driving with her legs, then reaches a flatter spot and talks to camera. The leggings stay put and squat-proof.",
+		setting: "On a steep grassy hillside path in a green park, the slope rising ahead, trees and open sky behind.",
+		camera:  "a low front angle looking up the hill, full length",
+	},
+	{
+		name:    "treadmill run",
+		pose:    "running on a gym treadmill at a steady pace, relaxed upright form",
+		action:  "She runs on a treadmill at a steady pace with relaxed upright form, glancing to camera and talking. The top stays down through every step.",
+		setting: "On a treadmill in a bright modern gym, rows of cardio machines and mirrored walls softly blurred behind, clean even lighting.",
+		camera:  "front on at chest height, full length",
+	},
+	{
+		name:    "trail run",
+		pose:    "running along an outdoor dirt trail, mid-stride over the path",
+		action:  "She runs along a forest trail, mid-stride over the dirt path, then slows and talks to camera. The activewear moves with her and stays opaque.",
+		setting: "On a dirt trail path winding through a green park/forest, dappled daylight, trees lining both sides of the path.",
+		camera:  "a side three-quarter tracking angle along the trail, full length",
+	},
+	{
+		name:    "cool-down",
+		pose:    "slowing from a run to a walk, hands on her hips, catching her breath",
+		action:  "She slows from a run to a walk, hands on her hips, catching her breath and smiling at camera for a warm sincere close. The top stays in place.",
+		setting: "Back on the running track at the finish, lane lines underfoot, the stadium softly blurred behind, warm late-afternoon light.",
+		camera:  "front on, slightly low angle, full length",
+	},
+}
+
+func runSceneAt(i int) hyroxScene {
+	n := len(runScenes)
+	if n == 0 {
+		return hyroxScene{}
+	}
+	return runScenes[((i%n)+n)%n]
+}
+
+// isSportFormat reports whether a format uses per-shot athletic scenes.
+func isSportFormat(format string) bool { return format == "hyrox" || format == "run" }
+
+// sportSceneAt returns the per-shot scene for hyrox or run formats.
+func sportSceneAt(format string, i int) hyroxScene {
+	if format == "run" {
+		return runSceneAt(i)
+	}
+	return hyroxSceneAt(i)
+}
+
 // SceneLabel is a short human label for scene i (used in the per-scene prompt UI).
-// For hyrox it names the exercise so the user sees each shot is a different scene.
 func SceneLabel(format string, i int) string {
-	if format == "hyrox" {
-		return hyroxSceneAt(i).name
+	if isSportFormat(format) {
+		return sportSceneAt(format, i).name
 	}
 	return ""
 }

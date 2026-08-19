@@ -200,6 +200,46 @@ var FORMATS = []Format{
 			`6.5s-8.0s — Raises her free index finger and points clearly toward the bottom-left corner of the frame, holding it while she breathes easy. The arena behind her is unchanged.`,
 		},
 	},
+	{
+		ID:   "run",
+		Th:   "กีฬา วิ่ง",
+		Tag:  "มีบทพูด · วล็อกวิ่งจริง",
+		Desc: "วล็อกรีวิวชุดกีฬาแนววิ่งจริง แต่ละช็อตวิ่งคนละแบบ (จ็อกกิ้ง/สปรินต์/ขึ้นเนิน/ลู่วิ่ง/เทรล/คูลดาวน์) โชว์ว่าชุดเวิร์กตอนวิ่งจริง",
+
+		Voice: true,
+		Feet:  true,
+
+		Props:   `Nothing in her hands.`,
+		Setting: `An outdoor rubber running track at a sports stadium: red-brown track with crisp white lane lines curving away, low empty stands and floodlight towers softly out of focus in the far background, open sky. The layout is fixed and the background stays static.`,
+		Light:   `Bright, even, natural daylight around 5500K, clean and neutral, soft across the whole body with no hard shadows. No coloured stage lights, no haze. The colour temperature and intensity stay constant from the first frame to the last.`,
+		Camera:  `Vertical 9:16, shot on a phone at chest height, framing that keeps her full length in shot as she runs. Steady and clean, no shaky handheld. She stays a consistent size in frame; the background stays static.`,
+		Neg:     `no other runners crowding her, no coach beside her, no sharp foreground crowd, no bicycle, no car, no coloured stage lighting, no haze, no smoke, no motion blur on the garment,`,
+		Clip:    `sportswear running review video`,
+		Cont:    `same outfit, same daylight, same running style`,
+
+		Pose1: `POSE — mid-stride jog, front on: She jogs at an easy pace toward the camera, arms relaxed and swinging naturally, one foot in the air mid-stride, wearing the activewear. Athletic and relaxed, showing how the top and leggings sit and hold while running.`,
+		Pose2: `POSE — powerful sprint, side on: She is in a full sprint, driving one knee high and pumping her arms, body leaning forward with real speed, wearing the activewear. Genuine effort, showing the top stayed down and in place through the movement.`,
+		Lock1: `She runs in a natural forward path but the framing keeps her full length and centred, returning to the same size in frame; she never drifts out of frame. Body rotation stays natural for running.`,
+		Lock2: `She runs with genuine form; the framing keeps her full length and she never leaves the frame; the top never rides up and no skin shows at the waist.`,
+
+		Motion1: `Real running movement with genuine effort — natural stride, arms swinging, breathing, hair and fabric moving with each step — smooth and continuous, not jittery. Only she and her running motion move naturally; nothing snaps, teleports or holds rigid.`,
+		Motion2: `Real running movement with genuine effort — natural cadence, visible breathing, hair and fabric carrying momentum — smooth and continuous. Nothing snaps or freezes; motion looks physically correct.`,
+
+		Amb: `outdoor track ambience — a light breeze, the rhythmic footfalls of her running shoes, her own controlled breathing, faint distant sport-field sounds, no music and no crowd noise`,
+
+		T1: []string{
+			`0.0s-3.0s — She runs at a steady pace with clean natural form, the top staying down and no skin showing at the waist.`,
+			`3.0s-5.0s — She eases to a jog, slightly out of breath, and talks to the camera about how the outfit moved with her while running.`,
+			`5.0s-6.5s — She runs one hand down the side seam of the leggings to show they stayed put while she ran.`,
+			`6.5s-8.0s — She slows, wipes her brow with the back of her wrist and gives a confident nod. The track behind her is unchanged.`,
+		},
+		T2: []string{
+			`0.0s-3.0s — She picks up into a fast run with strong form, arms pumping, the top staying in place and opaque.`,
+			`3.0s-5.0s — She slows to a walk, hands on hips, breathing, and talks to the camera about the fabric being sweat-wicking and staying put.`,
+			`5.0s-6.5s — She jogs lightly on the spot facing the camera, running a hand along the waistband to show it did not roll down.`,
+			`6.5s-8.0s — She raises her free index finger and points clearly toward the bottom-left corner of the frame, breathing easy. The track behind her is unchanged.`,
+		},
+	},
 }
 
 // CAFE_ITEMS mirrors the HTML cafe table presets.

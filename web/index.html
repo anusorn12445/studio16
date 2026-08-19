@@ -124,7 +124,7 @@ video{width:100%;border-radius:9px;border:1px solid var(--line);background:#000}
 </div>
 
 <script>
-const NAV=[{k:'clip',name:'ทำคลิป',ic:'🎬'},{k:'prompts',name:'คลังพรอมต์',ic:'📚'},{k:'characters',name:'ตัวละคร',ic:'🎭'},{k:'clips',name:'คลังคลิป',ic:'🎞️'}];
+const NAV=[{k:'home',name:'หน้าหลัก',ic:'🏠'},{k:'clip',name:'ทำคลิป',ic:'🎬'},{k:'prompts',name:'คลังพรอมต์',ic:'📚'},{k:'characters',name:'ตัวละคร',ic:'🎭'},{k:'clips',name:'คลังคลิป',ic:'🎞️'}];
 const CATTREE={ name:'หมวด', children:{
   review:{ name:'รีวิวสินค้า', ic:'🛍️', children:{
     clothing:{ name:'เสื้อผ้า', ic:'👕', children:{
@@ -144,7 +144,7 @@ const CATTREE={ name:'หมวด', children:{
   lifestyle:{ name:'ไลฟ์สไตล์', ic:'✨', soon:true },
   unbox:{ name:'แกะกล่อง', ic:'📦', soon:true },
 }};
-let nav='clip', products=[], cur=null, tab='info', presets=[], health=null, pollTimer=null, clipOpen=true, catPath=[], autoReportPending=false;
+let nav='home', products=[], cur=null, tab='info', presets=[], health=null, pollTimer=null, clipOpen=true, catPath=[], autoReportPending=false;
 
 async function api(path,opts){
   const r=await fetch(path,opts||{});
@@ -275,10 +275,53 @@ async function newProduct(){
 function renderMain(){
   stopPoll();
   updateMismatchPopup();
+  if(nav==='home') return homeView();
   if(nav==='clip') return clipView();
   if(nav==='prompts') return promptsView();
   if(nav==='characters') return charView();
   if(nav==='clips') return clipsView();
+}
+
+/* ---------- หน้าหลัก · สถานะการทำงาน ---------- */
+function homeStats(){
+  const s={products:products.length, videoDone:0, videoFail:0, mismatch:0, imgs:0, imgPass:0, needy:0, busy:0};
+  products.forEach(p=>(p.jobs||[]).forEach(j=>{
+    if(j.status==='done'&&j.videoPath) s.videoDone++;
+    else if(j.status==='error') s.videoFail++;
+    if(j.status==='mismatch') s.mismatch++;
+    if(j.imagePath){ s.imgs++; if((j.matchScore||0)>=60) s.imgPass++; }
+    if(jobNeedsVideo(j)) s.needy++;
+    if(jobBusy(j)) s.busy++;
+  }));
+  return s;
+}
+function refreshHome(e){ if(e) e.preventDefault(); reloadProducts().then(()=>{ if(nav==='home') homeView(); }); }
+function homeView(){
+  const main=document.getElementById('main');
+  const s=homeStats();
+  const card=(label,n,color)=>'<div class="stat" style="min-width:132px;flex:1"><div class="muted" style="font-size:12px">'+label+'</div><div class="n"'+(color?(' style="color:'+color+'"'):'')+'>'+n+'</div></div>';
+  main.innerHTML=
+    '<div class="h">หน้าหลัก · สถานะการทำงาน</div>'+
+    '<div class="sub">ภาพรวมงานที่โปรแกรมทำ · <a href="#" onclick="refreshHome(event)" style="color:var(--lilac)">🔄 รีเฟรช</a></div>'+
+    '<div class="lbl" style="margin:18px 0 8px">ภาพรวม</div>'+
+    '<div class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:22px">'+
+      card('สินค้าทั้งหมด',s.products)+
+      card('รูปที่สร้าง',s.imgs)+
+      card('วิดีโอเสร็จ',s.videoDone,'var(--ok)')+
+      card('กำลังทำงาน',s.busy,s.busy?'var(--lilac)':'')+
+    '</div>'+
+    '<div class="lbl" style="margin:6px 0 8px">🎬 วิดีโอ</div>'+
+    '<div class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:22px">'+
+      card('เสร็จแล้ว',s.videoDone,'var(--ok)')+
+      card('ล้มเหลว (เฟล)',s.videoFail,s.videoFail?'var(--bad)':'')+
+      card('รอเจนวิดีโอ',s.needy,s.needy?'#FFCC66':'')+
+    '</div>'+
+    '<div class="lbl" style="margin:6px 0 8px">🖼️ รูปภาพ</div>'+
+    '<div class="row" style="gap:12px;flex-wrap:wrap">'+
+      card('สร้างทั้งหมด',s.imgs)+
+      card('ผ่านเกณฑ์ ≥60',s.imgPass,'var(--ok)')+
+      card('สินค้าไม่ตรง (ไม่ผ่าน)',s.mismatch,s.mismatch?'var(--bad)':'')+
+    '</div>';
 }
 
 /* ---------- ทำคลิป ---------- */
@@ -311,7 +354,7 @@ function infoPanel(p){
       '<label class="f"><span class="lbl">ชื่อสินค้า</span><input id="f_name" value="'+esc(p.name)+'"></label>'+
       '<label class="f"><span class="lbl">ประเภท (อังกฤษ)</span><input id="f_type" value="'+esc(p.type)+'"></label>'+
       '<label class="f"><span class="lbl">สีหลัก</span><input id="f_hero" value="'+esc(p.heroColor)+'"></label>'+
-      '<label class="f"><span class="lbl">ฟอร์แมต</span><select id="f_fmt">'+opt(['mirror','cafe','pair','hyrox'],p.format,['ยืนหน้ากระจก','คาเฟ่','จับคู่สี','กีฬา HYROX'])+'</select></label>'+
+      '<label class="f"><span class="lbl">ฟอร์แมต</span><select id="f_fmt">'+opt(['mirror','cafe','pair','hyrox','run'],p.format,['ยืนหน้ากระจก','คาเฟ่','จับคู่สี','กีฬา HYROX','กีฬา วิ่ง'])+'</select></label>'+
       '<label class="f"><span class="lbl">โหมดเสียง</span><select id="f_audio">'+opt(['talk','laugh','silent'],p.audioMode,['พูด','หัวเราะ','เงียบ'])+'</select></label>'+
       '<label class="f"><span class="lbl">คาแรคเตอร์ (Base)</span><select id="f_char">'+(presets.length?presets.map(b=>'<option value="'+b.id+'"'+(p.basePresetId===b.id?' selected':'')+'>'+esc(b.name)+'</option>').join(''):'<option value="">(ค่าเริ่มต้น)</option>')+'</select></label>'+
       '<label class="f"><span class="lbl">หมวดหมู่ *</span><select id="f_cat"><option value="">— เลือกหมวดหมู่ —</option>'+leafCategories().map(c=>'<option value="'+c.path+'"'+(p.category===c.path?' selected':'')+'>'+esc(c.label)+'</option>').join('')+'</select></label>'+
@@ -370,7 +413,7 @@ function promptPanel(p){
     '<button class="btn" onclick="saveScript()" style="margin:2px 0 18px">บันทึกบท</button>'+
     '<div class="lbl">ขั้น 2 · พรอมต์ (แยกทีละซีน)</div>'+
     '<div class="row" style="margin:6px 0 8px">'+
-      '<select id="p_fmt" style="width:auto">'+opt(['mirror','cafe','pair','hyrox'],p.format,['ยืนหน้ากระจก','คาเฟ่','จับคู่สี','กีฬา HYROX'])+'</select>'+
+      '<select id="p_fmt" style="width:auto">'+opt(['mirror','cafe','pair','hyrox','run'],p.format,['ยืนหน้ากระจก','คาเฟ่','จับคู่สี','กีฬา HYROX','กีฬา วิ่ง'])+'</select>'+
       '<select id="p_audio" style="width:auto">'+opt(['talk','laugh','silent'],p.audioMode,['พูด','หัวเราะ','เงียบ'])+'</select>'+
       '<span class="lbl" style="margin-left:6px">จำนวนช็อต</span><input id="p_shots" type="number" min="1" max="4" value="1" style="width:64px" oninput="updTotal()">'+
       '<button class="btn" onclick="buildScenes()">สร้างพรอมต์รายซีน</button></div>'+
@@ -469,10 +512,13 @@ function jobCard(j){
   // A qualified image that just lacks a video is NOT an error — show it as done.
   let col=s==='done'?'var(--ok)':bad?'var(--bad)':'var(--lilac)';
   let ic=s==='done'?'✓':bad?'✕':'◴';
-  let label={queued:'เข้าคิว',image:'ขั้น 1/2 · สร้างภาพ',checking:'กำลังตรวจสินค้า…',running:'ขั้น 2/2 · เรนเดอร์วิดีโอ…',done:'เสร็จ',error:'ผิดพลาด',mismatch:'สินค้าไม่ตรง'}[s]||s;
+  let label={queued:'เข้าคิว',image:'ขั้น 1/2 · สร้างภาพ',checking:'กำลังตรวจสินค้า…',running:'ขั้น 2/2 · เรนเดอร์วิดีโอ…',vcheck:'ตรวจคุณภาพวิดีโอ…',done:'เสร็จ',error:'ผิดพลาด',mismatch:'สินค้าไม่ตรง'}[s]||s;
+  if(s==='running'&&j.videoAttempt>1) label+=' (ครั้งที่ '+j.videoAttempt+'/3)';
+  if(s==='vcheck'&&j.videoAttempt) label+=' (ครั้งที่ '+j.videoAttempt+'/3)';
   if(s==='image'&&j.attempt) label+=' (ครั้งที่ '+j.attempt+'/3)';
   if(needy){ col='var(--ok)'; ic='✓'; label='เสร็จ'; }
-  const score=(j.matchScore?'<span class="muted" style="font-size:11.5px;margin-left:8px">คะแนนตรง '+j.matchScore+'</span>':'');
+  const score=(j.matchScore?'<span class="muted" style="font-size:11.5px;margin-left:8px">คะแนนตรง '+j.matchScore+'</span>':'')+
+    (j.videoScore?'<span class="muted" style="font-size:11.5px;margin-left:8px;color:'+(j.videoScore>=65?'var(--ok)':'#FFCC66')+'">คะแนนวิดีโอ '+j.videoScore+'</span>':'');
   const media=[];
   if(j.imagePath) media.push('<div><div class="lbl" style="margin-bottom:4px">ภาพ</div>'+imageThumb(assetURL(j.imagePath))+'</div>');
   if(s==='done'&&j.videoPath) media.push('<div><div class="lbl" style="margin-bottom:4px">วิดีโอ</div>'+videoThumb(assetURL(j.videoPath))+'</div>');
@@ -484,9 +530,11 @@ function jobCard(j){
     '<div style="flex:1"><div style="font-size:13px">'+esc(j.format)+' · '+esc(j.audioMode)+(j.durationSeconds?(' · '+j.durationSeconds+' วิ'):'')+score+'</div><div class="muted" style="font-size:11.5px">'+esc(j.provider||'')+'</div></div>'+
     '<span style="font-size:12px;color:'+col+'">'+label+'</span></div>'+err+notyet+regen+mediaHtml+'</div>';
 }
-function jobBusy(j){ return j.status==='queued'||j.status==='image'||j.status==='checking'||j.status==='running'; }
+function jobBusy(j){ return j.status==='queued'||j.status==='image'||j.status==='checking'||j.status==='running'||j.status==='vcheck'; }
 const HYROX_NAMES=['วอลบอล','เข็นสเลด','battle ropes','farmers carry','sandbag lunge','เบอร์ปี'];
-function sceneName(j){ return (j.format==='hyrox'&&HYROX_NAMES[j.scene]!=null)?HYROX_NAMES[j.scene]:((j.scene!=null?('ฉาก '+(j.scene+1)):'')+' '+esc(j.format)); }
+const RUN_NAMES=['จ็อกกิ้งวอร์มอัพ','สปรินต์','วิ่งขึ้นเนิน','ลู่วิ่ง','วิ่งเทรล','คูลดาวน์'];
+function sportNames(fmt){ return fmt==='run'?RUN_NAMES:(fmt==='hyrox'?HYROX_NAMES:null); }
+function sceneName(j){ const nm=sportNames(j.format); return (nm&&nm[j.scene]!=null)?nm[j.scene]:((j.scene!=null?('ฉาก '+(j.scene+1)):'')+' '+esc(j.format)); }
 function regenJob(jobId){ jpost('/api/products/'+cur+'/jobs/'+jobId+'/regen',{}).then(()=>{ toast('กำลังเจนภาพใหม่'); startPoll(); if(nav==='clip'&&tab==='video') clipView(); updateMismatchPopup(); }).catch(e=>toast(e.message,1)); }
 function updateMismatchPopup(){
   const pop=document.getElementById('mmpop'); if(!pop) return;
@@ -594,48 +642,94 @@ function charView(){
 }
 
 /* ---------- คลังคลิป ---------- */
+function catLabelOf(path){ if(!path) return ''; const c=leafCategories().find(x=>x.path===path); return c?c.label:path; }
+function statusTh(j){ return ({queued:'เข้าคิว',image:'สร้างภาพ',checking:'กำลังตรวจ',running:'เรนเดอร์วิดีโอ',vcheck:'ตรวจวิดีโอ',done:'เสร็จ',error:'ผิดพลาด',mismatch:'สินค้าไม่ตรง'}[j.status])||j.status; }
 function clipsView(){
   const main=document.getElementById('main');
-  const all=[];
-  products.forEach(p=>(p.jobs||[]).forEach(j=>all.push({p,j})));
-  const needy=all.filter(({j})=>jobNeedsVideo(j));
   const anyBusy=products.some(p=>(p.jobs||[]).some(jobBusy));
-  const rest=all.filter(({j})=>(j.status==='done'&&j.videoPath)||jobBusy(j));
-
-  let recov='';
-  if(needy.length){
-    recov='<div style="margin:4px 0 18px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px">'+
-      '<div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'+
-        '<div style="font-size:13.5px">🎬 <b>รูปผ่านเกณฑ์ยังไม่มีวิดีโอ '+needy.length+' รูป</b><div class="muted" style="font-size:11.5px;margin-top:2px">ใช้ตอน Veo ติดลิมิต/ระบบล่ม — เจนวิดีโอจากภาพที่มีอยู่ ด้วยพรอมต์ที่ห้อยไว้กับแต่ละรูป</div></div>'+
-        '<div class="row" style="gap:10px;align-items:center"><label class="muted" style="font-size:12px"><input type="checkbox" id="cselall" checked onchange="toggleAllCsel(this.checked)"> เลือกทั้งหมด</label>'+
-        '<button class="btn o" style="padding:7px 13px;font-size:12.5px" onclick="renderSelectedClips()">▶ เจนวิดีโอที่เลือก</button></div>'+
+  let totalNeedy=0, blocks='', autoMergeQ=[];
+  products.forEach(p=>{
+    const jobs=(p.jobs||[]).filter(j=> jobBusy(j) || (j.status==='done'&&j.videoPath) || (j.imagePath && (j.matchScore||0)>=60));
+    if(!jobs.length) return;
+    // จัดกลุ่มเป็นชุด (ซีเควนซ์) ตามรอบที่เจน (createdAt) รอบใหม่อยู่บน
+    const bmap={}; jobs.forEach(j=>{ const k=String(j.createdAt||0); (bmap[k]=bmap[k]||[]).push(j); });
+    const keys=Object.keys(bmap).sort((a,b)=>Number(b)-Number(a));
+    let pb='';
+    keys.forEach((k,idx)=>{
+      const arr=bmap[k].slice().sort((a,b)=>(a.scene||0)-(b.scene||0));
+      const nd=arr.filter(jobNeedsVideo); totalNeedy+=nd.length;
+      const doneVids=arr.filter(j=>j.status==='done'&&j.videoPath);
+      const merged=(p.mergedVideos||{})[k];
+      const seqVids=arr.filter(j=>j.status==='done'&&j.videoPath).map(j=>videoThumb(assetURL(j.videoPath),'52px')).join('');
+      // วิดีโอเสร็จครบชุด (>=2) ไม่มีช็อตกำลังทำ และยังไม่รวม → สั่งรวมเองอัตโนมัติ
+      if(doneVids.length>=2 && !arr.some(jobBusy) && !merged) autoMergeQ.push({pid:p.id,k:k});
+      pb+='<div class="row" style="align-items:center;gap:8px;margin:12px 0 8px;flex-wrap:wrap;border-left:3px solid var(--lilac);padding-left:10px">'+
+        '<span style="font-size:13px;font-weight:600;color:var(--lilac)">ชุดที่ '+(keys.length-idx)+'</span>'+
+        '<span class="muted" style="font-size:11.5px">'+arr.length+' ช็อต · '+fmtTime(Number(k))+'</span>'+
+        (nd.length?('<span style="font-size:11.5px;color:#FFCC66">· รอวิดีโอ '+nd.length+'</span><button class="btn o" style="padding:4px 11px;font-size:11.5px" onclick="renderBatch(\''+p.id+'\',\''+k+'\')">▶ เจนวิดีโอทั้งชุด</button>'):'')+
+        (doneVids.length>=2?('<button class="btn" style="padding:4px 11px;font-size:11.5px" onclick="mergeSeq(\''+p.id+'\',\''+k+'\',this)">🎬 '+(merged?'รวมใหม่':'รวมวิดีโอทั้งชุด')+'</button>'):'')+
       '</div>'+
-      '<div class="grid" style="margin-top:12px">'+needy.map(({p,j})=>clipNeedyCard(p,j)).join('')+'</div>'+
-    '</div>';
-  }
+      (merged?('<div class="gcard" style="max-width:240px;margin:2px 0 12px;border-color:var(--lilac)"><div class="muted" style="font-size:11px;margin-bottom:6px">🎬 วิดีโอรวมทั้งชุด ('+doneVids.length+' ช็อต)</div>'+videoThumb(assetURL(merged),'100%')+(seqVids?('<div style="margin-top:7px"><div class="muted" style="font-size:10.5px;margin-bottom:4px">วิดีโอแต่ละช็อต</div><div style="display:flex;gap:5px;flex-wrap:wrap">'+seqVids+'</div></div>'):'')+'</div>'):'')+
+      '<div class="grid">'+arr.map(j=>seqCard(p,j)).join('')+'</div>';
+    });
+    blocks+='<div style="margin-bottom:6px"><div class="lbl" style="font-size:15px;color:var(--parchment);margin:22px 0 0">📦 '+esc(p.name||'สินค้า')+
+      (catLabelOf(p.category)?(' <span class="muted" style="font-size:11.5px;font-weight:400">· '+esc(catLabelOf(p.category))+'</span>'):'')+'</div>'+pb+'</div>';
+  });
 
-  const grid=rest.length?('<div class="grid">'+rest.map(({p,j})=>clipCard(p,j)).join('')+'</div>'):'<div class="muted">ยังไม่มีคลิปที่เจนแล้ว</div>';
-  main.innerHTML='<div class="h">คลังคลิป</div><div class="sub">เจนวิดีโอจากรูปที่ผ่านเกณฑ์ และดูคลิปที่เจนแล้วทั้งหมด'+(anyBusy?' · กำลังทำงาน…':'')+'</div>'+
-    recov+'<div class="lbl" style="margin:6px 0 8px">คลิปที่เจนแล้ว / กำลังทำ</div>'+grid;
+  let top='';
+  if(totalNeedy){
+    top='<div style="margin:4px 0 6px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);padding:11px 14px">'+
+      '<div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'+
+        '<div style="font-size:13px">🎬 <b>รูปผ่านเกณฑ์ยังไม่มีวิดีโอ '+totalNeedy+' รูป</b> <span class="muted" style="font-size:11px">(กู้ตอน Veo ติดลิมิต)</span></div>'+
+        '<div class="row" style="gap:10px;align-items:center"><label class="muted" style="font-size:12px"><input type="checkbox" checked onchange="toggleAllCsel(this.checked)"> เลือกทั้งหมด</label>'+
+        '<button class="btn o" style="padding:6px 12px;font-size:12px" onclick="renderSelectedClips()">▶ เจนวิดีโอที่เลือก</button></div>'+
+      '</div></div>';
+  }
+  const merging=autoMergeQ.length;
+  main.innerHTML='<div class="h">คลังคลิป</div><div class="sub">แยกตามสินค้าและชุด (ซีเควนซ์) · ซีนเรียงลำดับในแต่ละชุด'+(anyBusy?' · กำลังทำงาน…':(merging?' · กำลังรวมวิดีโอ '+merging+' ชุด…':''))+'</div>'+
+    top+(blocks||'<div class="muted">ยังไม่มีคลิป/รูปที่ผ่านเกณฑ์</div>');
+  autoMergeQ.forEach(m=>autoMergeSeq(m.pid,m.k));
   if(anyBusy) startClipsPoll();
 }
-function clipCard(p,j){
-  const done=j.status==='done';
-  const badge=done?'<span class="badge" style="background:rgba(111,216,168,.16);color:var(--ok)">เสร็จ</span>':
-    '<span class="badge" style="background:rgba(185,166,232,.16);color:var(--lilac)">'+esc(j.status)+'</span>';
-  const media=(done&&j.videoPath)?videoThumb(assetURL(j.videoPath),'100%'):(j.imagePath?imageThumb(assetURL(j.imagePath),'100%'):'<div class="thumb">'+(done?'▶':'◴')+'</div>');
-  const extra=(done&&j.videoPath&&j.imagePath)?'<div style="margin-top:6px"><span class="lbl">ภาพ</span> '+imageThumb(assetURL(j.imagePath),'52px')+'</div>':'';
-  return '<div class="gcard">'+media+extra+'<div style="font-size:13px;margin-top:8px">'+esc(p.name)+'</div><div class="muted" style="font-size:11.5px;margin:2px 0 8px">'+esc(j.format)+' · '+esc(j.audioMode)+(j.durationSeconds?(' · '+j.durationSeconds+' วิ'):'')+'</div>'+badge+'</div>';
+let autoMerging={};
+function autoMergeSeq(pid,k){
+  const key=pid+'_'+k;
+  if(autoMerging[key]) return; autoMerging[key]=true;
+  jpost('/api/products/'+pid+'/merge',{batch:k})
+    .then(()=>{ delete autoMerging[key]; return reloadProducts(); })
+    .then(()=>{ if(nav==='clips') clipsView(); })
+    .catch(()=>{ delete autoMerging[key]; });
 }
-function clipNeedyCard(p,j){
-  return '<div class="gcard">'+
-    '<label class="row" style="gap:6px;font-size:12px;margin-bottom:6px;cursor:pointer"><input type="checkbox" class="csel" value="'+p.id+'|'+j.id+'" checked> เลือก</label>'+
-    imageThumb(assetURL(j.imagePath),'100%')+
-    '<div style="font-size:13px;margin-top:8px">'+esc(p.name)+'</div>'+
-    '<div class="muted" style="font-size:11.5px;margin:2px 0 6px">'+sceneName(j)+' · คะแนน '+(j.matchScore||0)+'</div>'+
-    '<button class="btn o" style="width:100%;padding:6px;font-size:12px" onclick="renderOneClip(\''+p.id+'\',\''+j.id+'\')">▶ เจนวิดีโอรูปนี้</button>'+
-    (j.prompt?'<details style="margin-top:6px"><summary class="muted" style="font-size:11.5px;cursor:pointer">พรอมต์วิดีโอ (ห้อยไว้)</summary><div class="pre" style="font-size:11px;margin-top:4px;white-space:pre-wrap">'+esc(j.prompt)+'</div></details>':'')+
-  '</div>';
+function seqCard(p,j){
+  const done=(j.status==='done'&&j.videoPath);
+  const needy=jobNeedsVideo(j);
+  const _sn=sportNames(j.format); const nm=(_sn&&_sn[j.scene]!=null)?_sn[j.scene]:'';
+  const label='ซีน '+((j.scene||0)+1)+(nm?(' · '+nm):'');
+  const media=done?videoThumb(assetURL(j.videoPath),'100%'):(j.imagePath?imageThumb(assetURL(j.imagePath),'100%'):'<div class="thumb">◴</div>');
+  // เก็บวิดีโอ+ภาพคู่กัน: การ์ดที่มีวิดีโอแล้ว โชว์ภาพเฟรมแรกเล็กๆ ควบไปด้วย
+  const extra=(done&&j.imagePath)?'<div style="margin-top:6px"><div class="muted" style="font-size:10.5px;margin-bottom:3px">ภาพเฟรมแรก</div>'+imageThumb(assetURL(j.imagePath),'82px')+'</div>':'';
+  const pill=(t,c,bg)=>'<span style="background:'+bg+';color:'+c+';border-radius:999px;padding:2px 9px;font-size:11px">'+t+'</span>';
+  const badge=done?pill('✓ วิดีโอเสร็จ','var(--ok)','rgba(111,216,168,.16)')
+    :needy?pill('⏳ รอวิดีโอ','#FFCC66','rgba(255,204,102,.16)')
+    :jobBusy(j)?pill(statusTh(j),'var(--lilac)','rgba(185,166,232,.16)')
+    :pill(statusTh(j),'var(--muted)','rgba(255,255,255,.06)');
+  const score=j.matchScore?'<span class="muted" style="font-size:11px;margin-left:6px">คะแนน '+j.matchScore+'</span>':'';
+  const chk=needy?'<label class="row" style="gap:5px;font-size:11.5px;margin-bottom:6px;cursor:pointer"><input type="checkbox" class="csel" value="'+p.id+'|'+j.id+'" checked> เลือก</label>':'';
+  const btn=needy?'<button class="btn o" style="width:100%;padding:6px;font-size:11.5px;margin-top:6px" onclick="renderOneClip(\''+p.id+'\',\''+j.id+'\')">▶ เจนวิดีโอ</button>':'';
+  const vp=(needy&&j.prompt)?'<details style="margin-top:6px"><summary class="muted" style="font-size:11px;cursor:pointer">พรอมต์วิดีโอ</summary><div class="pre" style="font-size:10.5px;margin-top:4px;white-space:pre-wrap">'+esc(j.prompt)+'</div></details>':'';
+  return '<div class="gcard">'+chk+media+extra+'<div style="font-size:12.5px;font-weight:600;margin-top:8px">'+esc(label)+'</div><div style="margin:5px 0">'+badge+score+'</div>'+btn+vp+'</div>';
+}
+function renderBatch(pid,k){
+  const p=products.find(x=>x.id===pid); if(!p) return;
+  const items=(p.jobs||[]).filter(j=>String(j.createdAt||0)===String(k)&&jobNeedsVideo(j)).map(j=>({pid:pid,jid:j.id}));
+  renderVideosFor(items);
+}
+async function mergeSeq(pid,k,btn){
+  if(btn){ btn.disabled=true; btn.textContent='กำลังรวม…'; }
+  try{ const r=await jpost('/api/products/'+pid+'/merge',{batch:k});
+    toast('รวมวิดีโอเสร็จ ('+((r&&r.shots)||'')+' ช็อต)');
+    await reloadProducts(); if(nav==='clips') clipsView();
+  }catch(e){ toast(e.message,1); if(btn){ btn.disabled=false; btn.textContent='🎬 รวมวิดีโอทั้งชุด'; } }
 }
 function toggleAllCsel(on){ document.querySelectorAll('.csel').forEach(b=>{ b.checked=on; }); }
 function renderSelectedClips(){

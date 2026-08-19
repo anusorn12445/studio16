@@ -110,9 +110,10 @@ type Product struct {
 	Clips   []Clip   `json:"clips"`
 
 	// studio16-go additions (not in the original HTML):
-	Images []Image `json:"images"` // uploaded reference photos
-	Jobs   []Job   `json:"jobs"`   // video generation jobs
-	Report *Report `json:"report"` // latest product-match report
+	Images       []Image           `json:"images"`       // uploaded reference photos
+	Jobs         []Job             `json:"jobs"`         // video generation jobs
+	Report       *Report           `json:"report"`       // latest product-match report
+	MergedVideos map[string]string `json:"mergedVideos"` // batch(createdAt) -> merged clip path
 }
 
 // Job tracks one Veo video generation request.
@@ -131,6 +132,9 @@ type Job struct {
 	Attempt     int    `json:"attempt"`     // current image-generation attempt (1..3)
 	MatchScore  int    `json:"matchScore"`  // last image match score vs the product
 	VideoPath   string `json:"videoPath"`
+	VideoScore  int      `json:"videoScore"`  // last video-quality score (flicker/distortion/motion/extras)
+	VideoAttempt int     `json:"videoAttempt"` // current video render attempt (1..3)
+	VideoIssues []string `json:"videoIssues"` // defects the QC found in the video
 	Error       string `json:"error"`
 	CreatedAt   int64  `json:"createdAt"`
 	UpdatedAt   int64  `json:"updatedAt"`
